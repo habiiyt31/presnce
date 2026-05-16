@@ -333,7 +333,7 @@ export default function HomePage() {
             <FingerprintLogo size={16} />
             <span style={{ fontWeight: 700, color: "var(--ink-3)", letterSpacing: "-.01em" }}>Presnce</span>
           </div>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Built on GenLayer Studionet</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Powered by GenLayer</span>
         </div>
       </footer>
     </div>
