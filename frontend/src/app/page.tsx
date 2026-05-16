@@ -91,7 +91,7 @@ export default function HomePage() {
                 maxWidth: 440, marginBottom: 32,
               }}>
                 AI validators fetch your proof from the internet and issue
-                a tamper-proof attendance certificate on GenLayer — no QR
+                a tamper-proof attendance certificate on GenLayer no QR
                 codes, no check-in apps, no centralized databases.
               </p>
 
@@ -333,7 +333,7 @@ export default function HomePage() {
             <FingerprintLogo size={16} />
             <span style={{ fontWeight: 700, color: "var(--ink-3)", letterSpacing: "-.01em" }}>Presnce</span>
           </div>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Built on GenLayer Studionet</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>powered by GenLayer</span>
         </div>
       </footer>
     </div>
