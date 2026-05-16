@@ -5,6 +5,11 @@
 @layer base {
   :root {
     --teal:          #0D9488;
+
+    /* Verdict colors */
+    --verify-green:  #10B981;
+    --verify-red:    #EF4444;
+    --verify-amber:  #F59E0B;
     --teal-light:    #14B8A6;
     --teal-dim:      #0F766E;
     --teal-bg:       #F0FDFA;

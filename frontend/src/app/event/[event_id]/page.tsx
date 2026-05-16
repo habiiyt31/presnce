@@ -2,23 +2,17 @@
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { useEvent, useEventAttendances } from "@/hooks/useContract";
-import { shortAddr, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { useDisplayName } from "@/hooks/useNickname";
 
 function AttendeeName({ address }: { address: string }) {
   const name = useDisplayName(address);
-  return <>{name || shortAddr(address)}</>;
+  return <>{name}</>;
 }
 
-const VERDICT_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
-  valid:        { bg: "#D1FAE5", color: "#065F46", dot: "#10B981" },
-  invalid:      { bg: "#FEE2E2", color: "#991B1B", dot: "#EF4444" },
-  insufficient: { bg: "#FEF3C7", color: "#92400E", dot: "#F59E0B" },
-};
-
 export default function EventDetailPage({ params }: { params: { event_id: string } }) {
-  const { event_id }   = params;
-  const { event, loading: evLoading }       = useEvent(event_id);
+  const { event_id } = params;
+  const { event, loading: evLoading } = useEvent(event_id);
   const { attendances, loading: attLoading } = useEventAttendances(event ? Number(event.event_id) : null);
 
   const verified     = attendances.filter(a => a.verdict === "valid");
@@ -27,6 +21,13 @@ export default function EventDetailPage({ params }: { params: { event_id: string
   const spotsLeft    = event ? event.max_attendees - event.attendee_count : 0;
   const fillPct      = event ? Math.min(100, (event.attendee_count / event.max_attendees) * 100) : 0;
 
+  const verdictLabel = (v: string) =>
+    v === "valid" ? "Attendance verified" : v === "insufficient" ? "Proof insufficient" : "Not verified";
+  const verdictColor = (v: string) =>
+    v === "valid" ? "var(--verify-green)" : v === "insufficient" ? "var(--verify-amber)" : "var(--verify-red)";
+  const verdictBg = (v: string) =>
+    v === "valid" ? "rgba(16,185,129,.08)" : v === "insufficient" ? "rgba(245,158,11,.08)" : "rgba(239,68,68,.08)";
+
   if (evLoading) {
     return (
       <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
@@ -34,7 +35,6 @@ export default function EventDetailPage({ params }: { params: { event_id: string
         <main style={{ flex: 1, maxWidth: 1100, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
           <div className="skeleton" style={{ height: 16, width: 120, marginBottom: 24 }} />
           <div className="skeleton" style={{ height: 36, width: "60%", marginBottom: 12 }} />
-          <div className="skeleton" style={{ height: 16, width: "80%", marginBottom: 8 }} />
           <div className="skeleton" style={{ height: 200, marginTop: 24 }} />
         </main>
       </div>
@@ -47,9 +47,6 @@ export default function EventDetailPage({ params }: { params: { event_id: string
         <Navbar />
         <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 48, color: "var(--ink-6)", marginBottom: 16 }}>
-              #{event_id.padStart(4,"0")}
-            </p>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Event not found</h2>
             <Link href="/events" className="btn-secondary" style={{ fontSize: 13 }}>Back to events</Link>
           </div>
@@ -72,16 +69,14 @@ export default function EventDetailPage({ params }: { params: { event_id: string
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 24 }}>
 
-          {/* Left: Main info + gallery */}
+          {/* Left */}
           <div style={{ minWidth: 0 }}>
+
             {/* Cover image */}
             {event.image_url && (
               <div style={{ borderRadius: 14, overflow: "hidden", marginBottom: 20, border: "1px solid var(--ink-6)", background: "#000" }}>
-                <img
-                  src={event.image_url}
-                  alt={event.name}
-                  style={{ width: "100%", height: "auto", display: "block", maxHeight: 400 }}
-                />
+                <img src={event.image_url} alt={event.name}
+                  style={{ width: "100%", height: "auto", display: "block", maxHeight: 400 }} />
               </div>
             )}
 
@@ -91,7 +86,7 @@ export default function EventDetailPage({ params }: { params: { event_id: string
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: "var(--teal)" }}>
                   #{String(event.event_id).padStart(4,"0")}
                 </span>
-                {event.is_closed        && <span className="badge badge-closed">closed</span>}
+                {event.is_closed && <span className="badge badge-closed">closed</span>}
                 {!event.is_closed && spotsLeft === 0 && <span className="badge badge-invalid">full</span>}
               </div>
               <h1 style={{ fontSize: "clamp(22px,3vw,30px)", fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1.2, marginBottom: 10, overflowWrap: "anywhere" }}>
@@ -110,12 +105,8 @@ export default function EventDetailPage({ params }: { params: { event_id: string
             {/* Attendance gallery */}
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-.01em" }}>
-                  Attendance records
-                </h2>
-                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                  {attendances.length} total
-                </span>
+                <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-.01em" }}>Attendance records</h2>
+                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{attendances.length} total</span>
               </div>
 
               {attLoading && (
@@ -137,63 +128,52 @@ export default function EventDetailPage({ params }: { params: { event_id: string
 
               {!attLoading && attendances.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* Verified first */}
-                  {[...verified, ...insufficient, ...invalid].map(att => {
-                    const vc = VERDICT_CONFIG[att.verdict] ?? VERDICT_CONFIG.invalid;
-                    return (
-                      <div key={Number(att.attendance_id)} className="card" style={{ padding: "14px 18px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "var(--ink-4)" }}>
-                                #{String(att.attendance_id).padStart(4,"0")}
-                              </span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
-                                <AttendeeName address={att.attendee} />
-                              </span>
-                              <div style={{
-                                display: "inline-flex", alignItems: "center", gap: 4,
-                                fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 20,
-                                background: vc.bg, color: vc.color,
-                              }}>
-                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: vc.dot }} />
-                                {att.verdict}
-                              </div>
-                              {att.cert_minted && (
-                                <Link href={`/certificate/${att.attendance_id}`} style={{
-                                  fontSize: 10, fontWeight: 600, color: "#6366F1",
-                                  background: "#EEF2FF", padding: "1px 7px", borderRadius: 20, textDecoration: "none",
-                                }}>
-                                  ✓ cert →
-                                </Link>
-                              )}
-                            </div>
-                            <a href={att.proof_url} target="_blank" rel="noopener noreferrer" style={{
-                              fontSize: 11, color: "var(--ink-4)", display: "block",
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                              maxWidth: "100%",
-                            }}>
-                              {att.proof_url}
-                            </a>
-                            {att.reason && (
-                              <p style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic", marginTop: 6, lineHeight: 1.5 }}>
-                                "{att.reason}"
-                              </p>
+                  {[...verified, ...insufficient, ...invalid].map(att => (
+                    <div key={Number(att.attendance_id)} className="card" style={{
+                      padding: "14px 18px",
+                      borderLeft: `3px solid ${verdictColor(att.verdict)}`,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "var(--ink-4)" }}>
+                              #{String(att.attendance_id).padStart(4,"0")}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
+                              <AttendeeName address={att.attendee} />
+                            </span>
+                            {att.cert_minted && (
+                              <Link href={`/certificate/${att.attendance_id}`} style={{
+                                fontSize: 10, fontWeight: 600, color: "#6366F1",
+                                background: "#EEF2FF", padding: "1px 7px", borderRadius: 20, textDecoration: "none",
+                              }}>✓ cert →</Link>
                             )}
                           </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.02em" }}>
-                              {att.confidence}%
-                            </div>
+
+                          {/* Verdict — clear, no % */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: verdictColor(att.verdict) }} />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: verdictColor(att.verdict) }}>
+                              {verdictLabel(att.verdict)}
+                            </span>
                           </div>
-                        </div>
-                        {/* Confidence bar */}
-                        <div className="conf-track" style={{ marginTop: 10 }}>
-                          <div className="conf-fill" style={{ width: `${att.confidence}%` }} />
+
+                          <a href={att.proof_url} target="_blank" rel="noopener noreferrer" style={{
+                            fontSize: 11, color: "var(--ink-4)", display: "block",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            maxWidth: "100%", marginBottom: att.reason ? 6 : 0,
+                          }}>{att.proof_url}</a>
+
+                          {att.reason && (
+                            <div style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic",
+                              background: verdictBg(att.verdict), borderRadius: 6, padding: "6px 10px", lineHeight: 1.5 }}>
+                              "{att.reason}"
+                            </div>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -201,6 +181,7 @@ export default function EventDetailPage({ params }: { params: { event_id: string
 
           {/* Right: Details */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
             {/* Capacity */}
             <div className="card" style={{ padding: "20px 22px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 10 }}>
@@ -236,7 +217,7 @@ export default function EventDetailPage({ params }: { params: { event_id: string
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 3 }}>Date & Time</div>
                 <div style={{ fontSize: 13, color: "var(--ink-2)", fontFamily: "'JetBrains Mono',monospace" }}>
-                  {formatDate(event.event_date)}{event.event_time ? ` · ${event.event_time}` : ""}
+                  {formatDate(event.event_date)}{(event as any).event_time ? ` · ${(event as any).event_time}` : ""}
                 </div>
               </div>
 
@@ -246,25 +227,18 @@ export default function EventDetailPage({ params }: { params: { event_id: string
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 4, overflowWrap: "anywhere" }}>
                   {event.location}
                 </div>
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: 11, color: "var(--teal)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 10 }}
-                >
+                <a href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: "var(--teal)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 10 }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                   </svg>
                   Open in Maps
                 </a>
-                {/* Google Maps embed */}
                 <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--ink-6)" }}>
-                  <iframe
-                    title="Event location map"
-                    width="100%"
-                    height="200"
-                    style={{ display: "block", border: "none" }}
-                    loading="lazy"
+                  <iframe title="Event location map" width="100%" height="200"
+                    style={{ display: "block", border: "none" }} loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                     src={`https://maps.google.com/maps?q=${encodeURIComponent(event.location)}&output=embed&z=15`}
                   />
@@ -286,10 +260,7 @@ export default function EventDetailPage({ params }: { params: { event_id: string
               </Link>
             )}
 
-            <Link href="/events" style={{
-              display: "flex", alignItems: "center", gap: 4,
-              fontSize: 12, color: "var(--ink-4)", textDecoration: "none",
-            }}>
+            <Link href="/events" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ink-4)", textDecoration: "none" }}>
               ← Back to events
             </Link>
           </div>

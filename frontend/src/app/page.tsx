@@ -91,8 +91,8 @@ export default function HomePage() {
                 maxWidth: 440, marginBottom: 32,
               }}>
                 AI validators fetch your proof from the internet and issue
-                a tamper-proof attendance certificate on GenLayer no QR
-                codes, no check-in apps.
+                a tamper-proof attendance certificate on GenLayer — no QR
+                codes, no check-in apps, no centralized databases.
               </p>
 
               <div className="animate-fade-up delay-300" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -103,7 +103,7 @@ export default function HomePage() {
               <p className="animate-fade-up delay-400" style={{ marginTop: 20, fontSize: 13, color: "var(--ink-4)" }}>
                 Already attended?{" "}
                 <Link href="/claim" style={{ color: "var(--teal)", fontWeight: 600 }}>
-                  Claim your attendance 
+                  Claim your attendance
                 </Link>
               </p>
             </div>
@@ -236,7 +236,7 @@ export default function HomePage() {
               {
                 num: "02", accent: "#6366F1",
                 title: "Attendee submits proof",
-                body: "After attending, submit any public proof a tweet mentioning the event, a photo from the venue, or your RSVP link.",
+                body: "After attending, submit any public proof — a tweet mentioning the event, a photo from the venue, or your RSVP link.",
                 example: "e.g. Tweet: \"Just attended GenLayer Meetup Jakarta!\"",
               },
               {
@@ -297,7 +297,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  { name: "POAP",       desc: "Honor system, anyone can claim without proof", ok: false },
+                  { name: "POAP",       desc: "Honor system anyone can claim without proof", ok: false },
                   { name: "EventBrite", desc: "Centralized, single point of failure",           ok: false },
                   { name: "Presnce",    desc: "AI-verified, on-chain, tamper-proof certificates", ok: true },
                 ].map(r => (
@@ -333,7 +333,7 @@ export default function HomePage() {
             <FingerprintLogo size={16} />
             <span style={{ fontWeight: 700, color: "var(--ink-3)", letterSpacing: "-.01em" }}>Presnce</span>
           </div>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Powered by GenLayer</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Built on GenLayer Studionet</span>
         </div>
       </footer>
     </div>

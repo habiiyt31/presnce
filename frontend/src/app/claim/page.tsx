@@ -90,6 +90,28 @@ function ClaimForm() {
     setTx({ status: "idle" }); setClaimed(null);
   }
 
+  async function fetchTweetData(url: string): Promise<string> {
+    const isTweet = /(?:twitter\.com|x\.com)\/[^/]+\/status\/\d+/.test(url);
+    if (!isTweet) return "";
+    try {
+      const res = await fetch("/api/twitter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tweetUrl: url }),
+      });
+      const data = await res.json();
+      console.log("[fetchTweetData] status:", res.status, "data:", data);
+      if (!res.ok) {
+        console.error("[fetchTweetData] error:", data);
+        return "";
+      }
+      return JSON.stringify(data);
+    } catch (e) {
+      console.error("[fetchTweetData] exception:", e);
+      return "";
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!isConnected || !address) { connect(); return; }
@@ -106,10 +128,14 @@ function ClaimForm() {
       knownIds = new Set((ids || []).map(Number));
     } catch {}
 
+    // Fetch tweet data from twitterapi.io via server proxy
+    setTx({ status: "pending", message: "Fetching proof data..." });
+    const tweetData = await fetchTweetData(proofUrl);
+
     setTx({ status: "pending", message: "Submitting proof... AI validators are verifying." });
     try {
       const { txHash, timedOut } = await writeContract(
-        "claim_attendance", [Number(eventId), proofUrl], toWei(CLAIM_FEE)
+        "claim_attendance", [Number(eventId), proofUrl, tweetData], toWei(CLAIM_FEE)
       );
       setTx({ status: timedOut ? "pending" : "success", hash: txHash, message: "Resolving verdict..." });
       setResolving(true);
@@ -140,41 +166,31 @@ function ClaimForm() {
         </h1>
 
         <div className="card" style={{ padding: "clamp(20px,4vw,32px)", marginBottom: 16, borderTop: `3px solid ${verdictColor}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Attendance ID</div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(36px,6vw,56px)", fontWeight: 700, color: "var(--teal)", letterSpacing: "-.02em", lineHeight: 1 }}>
-                #{String(claimed.attendance_id).padStart(4,"0")}
-              </div>
+          {/* Attendance ID */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Attendance ID</div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(36px,6vw,56px)", fontWeight: 700, color: "var(--teal)", letterSpacing: "-.02em", lineHeight: 1 }}>
+              #{String(claimed.attendance_id).padStart(4,"0")}
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Confidence</div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(36px,6vw,56px)", fontWeight: 700, color: verdictColor, letterSpacing: "-.02em", lineHeight: 1 }}>
-                {claimed.confidence}%
-              </div>
-            </div>
-          </div>
-
-          <div className="conf-track" style={{ marginBottom: 8 }}>
-            <div className="conf-fill" style={{ width: `${claimed.confidence}%` }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-4)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 20 }}>
-            <span>uncertain</span><span>likely</span><span>verified</span>
           </div>
 
           <div className="divider" style={{ marginBottom: 16 }} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <div style={{ background: "var(--ink-8)", borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 600, marginBottom: 3 }}>Verdict</div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: verdictColor }}>{claimed.verdict}</div>
-            </div>
-            <div style={{ background: "var(--ink-8)", borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 600, marginBottom: 3 }}>Event</div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "var(--ink-2)" }}>#{String(claimed.event_id).padStart(4,"0")}</div>
+          {/* Verdict — clear text, no % */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: verdictColor, flexShrink: 0 }} />
+            <div style={{ fontSize: 18, fontWeight: 700, color: verdictColor }}>
+              {isValid ? "Attendance verified" : claimed.verdict === "insufficient" ? "Proof insufficient" : "Not verified"}
             </div>
           </div>
 
+          {/* Event */}
+          <div style={{ background: "var(--ink-8)", borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 600, marginBottom: 3 }}>Event</div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "var(--ink-2)" }}>#{String(claimed.event_id).padStart(4,"0")}</div>
+          </div>
+
+          {/* AI reason */}
           {claimed.reason && (
             <div style={{ background: verdictBg, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--ink-3)", fontStyle: "italic", lineHeight: 1.6 }}>
               "{claimed.reason}"

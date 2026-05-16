@@ -11,11 +11,7 @@ import { useNickname } from "@/hooks/useNickname";
 
 type TxState = { status: "idle"|"pending"|"success"|"error"; hash?: string; message?: string; };
 
-const VERDICT_CONFIG = {
-  valid:        { bg: "#D1FAE5", color: "#065F46", dot: "#10B981", label: "Valid"        },
-  invalid:      { bg: "#FEE2E2", color: "#991B1B", dot: "#EF4444", label: "Invalid"      },
-  insufficient: { bg: "#FEF3C7", color: "#92400E", dot: "#F59E0B", label: "Insufficient" },
-};
+
 
 export default function DashboardPage() {
   const { address, isConnected, connect, writeContract } = useWallet();
@@ -230,7 +226,6 @@ export default function DashboardPage() {
                 </div>
               )}
               {!attLoading && attendances.slice(0, 3).map(att => {
-                const vc = VERDICT_CONFIG[att.verdict as keyof typeof VERDICT_CONFIG] ?? VERDICT_CONFIG.invalid;
                 return (
                   <div key={Number(att.attendance_id)} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -242,12 +237,15 @@ export default function DashboardPage() {
                           Event #{String(att.event_id).padStart(4,"0")}
                         </span>
                         <div style={{
-                          display: "inline-flex", alignItems: "center", gap: 4,
-                          fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 20,
-                          background: vc.bg, color: vc.color,
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                          background: att.verdict === "valid" ? "#D1FAE5" : att.verdict === "insufficient" ? "#FEF3C7" : "#FEE2E2",
+                          color: att.verdict === "valid" ? "#065F46" : att.verdict === "insufficient" ? "#92400E" : "#991B1B",
                         }}>
-                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: vc.dot }} />
-                          {vc.label}
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
+                            background: att.verdict === "valid" ? "#10B981" : att.verdict === "insufficient" ? "#F59E0B" : "#EF4444"
+                          }} />
+                          {att.verdict === "valid" ? "Verified" : att.verdict === "insufficient" ? "Insufficient" : "Not verified"}
                         </div>
                         {att.cert_minted && (
                           <span style={{ fontSize: 10, fontWeight: 600, color: "#6366F1", background: "#EEF2FF", padding: "1px 7px", borderRadius: 20 }}>
@@ -258,9 +256,6 @@ export default function DashboardPage() {
                       <div style={{ fontSize: 11, color: "var(--ink-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {att.proof_url}
                       </div>
-                    </div>
-                    <div style={{ fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "var(--teal)", fontWeight: 600, flexShrink: 0 }}>
-                      {att.confidence}%
                     </div>
                   </div>
                 );
@@ -377,7 +372,6 @@ export default function DashboardPage() {
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {attendances.map(att => {
-                const vc = VERDICT_CONFIG[att.verdict as keyof typeof VERDICT_CONFIG] ?? VERDICT_CONFIG.invalid;
                 return (
                   <div key={Number(att.attendance_id)} className="card" style={{ padding: "20px 22px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -390,12 +384,15 @@ export default function DashboardPage() {
                             Event #{String(att.event_id).padStart(4,"0")}
                           </span>
                           <div style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 20,
-                            background: vc.bg, color: vc.color,
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                            background: att.verdict === "valid" ? "#D1FAE5" : att.verdict === "insufficient" ? "#FEF3C7" : "#FEE2E2",
+                            color: att.verdict === "valid" ? "#065F46" : att.verdict === "insufficient" ? "#92400E" : "#991B1B",
                           }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: vc.dot }} />
-                            {vc.label}
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                              background: att.verdict === "valid" ? "#10B981" : att.verdict === "insufficient" ? "#F59E0B" : "#EF4444"
+                            }} />
+                            {att.verdict === "valid" ? "Attendance verified" : att.verdict === "insufficient" ? "Proof insufficient" : "Not verified"}
                           </div>
                           {att.is_revoked && (
                             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", background: "var(--ink-7)", padding: "2px 9px", borderRadius: 20 }}>
@@ -422,12 +419,6 @@ export default function DashboardPage() {
                       </div>
 
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, flexShrink: 0 }}>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.02em" }}>
-                            {att.confidence}%
-                          </div>
-                          <div style={{ fontSize: 10, color: "var(--ink-4)" }}>confidence</div>
-                        </div>
                         {att.verdict === "valid" && !att.cert_minted && !att.is_revoked && (
                           <button
                             onClick={() => mintCertificate(Number(att.attendance_id))}

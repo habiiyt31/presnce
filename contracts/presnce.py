@@ -27,6 +27,7 @@ def _safe_str(value: typing.Any, max_len: int = 500) -> str:
 
 
 def _fetch_proof(url: str) -> str:
+    """Fallback fetch for non-Twitter URLs."""
     try:
         html = gl.nondet.web.get(url).body.decode("utf-8")
         return html[:3000] if html else "(empty)"
@@ -180,7 +181,7 @@ class Presnce(gl.Contract):
     # ── Write: Claim Attendance ────────────────────────────────
 
     @gl.public.write.payable
-    def claim_attendance(self, event_id: u256, proof_url: str) -> str:
+    def claim_attendance(self, event_id: u256, proof_url: str, tweet_data: str) -> str:
         attendee = gl.message.sender_address
         paid     = gl.message.value
         eid      = int(event_id)
@@ -199,9 +200,30 @@ class Presnce(gl.Contract):
         event_loc_val  = str(ev.location)
         event_date_val = str(ev.event_date)
         proof_url_val  = proof_url
+        tweet_data_val = tweet_data
 
         def leader_fn() -> dict:
+            # Use pre-fetched tweet data from frontend (TweetChecker pattern)
             snippet = _fetch_proof(proof_url_val)
+            if tweet_data_val and len(tweet_data_val) > 10:
+                try:
+                    td      = json.loads(tweet_data_val)
+                    # TweetChecker format: { profile: {...}, tweet: {...} }
+                    tweet   = td.get("tweet", {})
+                    profile = td.get("profile", {})
+                    text    = tweet.get("text", "")
+                    user    = tweet.get("author", {}).get("userName", "") or profile.get("userName", "")
+                    name    = tweet.get("author", {}).get("name", "") or profile.get("name", "")
+                    date    = tweet.get("createdAt", "")
+                    followers = profile.get("followers_count", profile.get("followersCount", 0))
+                    if text:
+                        snippet = (
+                            "Tweet by @" + user + " (" + name + ") on " + date + ":\n"
+                            + text + "\n"
+                            + "Followers: " + str(followers)
+                        )
+                except Exception:
+                    pass
 
             prompt = (
                 "You are an attendance verification judge on Presnce, an on-chain event platform.\n\n"
@@ -210,10 +232,10 @@ class Presnce(gl.Contract):
                 "- Location: " + event_loc_val + "\n"
                 "- Date: " + event_date_val + "\n\n"
                 "Attendee submitted proof URL: " + proof_url_val + "\n"
-                "Page content preview:\n" + snippet + "\n\n"
+                "Content fetched from proof URL:\n" + snippet + "\n\n"
                 "Verdict rules:\n"
                 "- \"valid\": proof clearly shows attendance (tweet mentioning event, ticket, RSVP, check-in)\n"
-                "- \"insufficient\": content loads but evidence is ambiguous or only partially related\n"
+                "- \"insufficient\": content is ambiguous or only partially related to the event\n"
                 "- \"invalid\": proof is unrelated, unreachable, or does not confirm attendance\n\n"
                 "Reply ONLY valid JSON, no markdown:\n"
                 "{\"verdict\":\"valid\",\"confidence\":85,\"reason\":\"short reason\"}"
