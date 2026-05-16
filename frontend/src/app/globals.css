@@ -71,6 +71,10 @@
     border: 1px solid var(--ink-6);
     border-radius: 14px;
     box-shadow: var(--shadow);
+    overflow: hidden;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .card-hover {
@@ -78,6 +82,10 @@
     border: 1px solid var(--ink-6);
     border-radius: 14px;
     box-shadow: var(--shadow);
+    overflow: hidden;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     transition: border-color .2s, box-shadow .2s, transform .15s;
   }
   .card-hover:hover {
@@ -85,6 +93,11 @@
     box-shadow: 0 0 0 3px rgba(13,148,136,.08), var(--shadow-md);
     transform: translateY(-2px);
   }
+
+  /* Line clamp utilities */
+  .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
   /* ── Buttons ────────────────────────────────────────── */
   .btn-primary {
@@ -375,4 +388,17 @@
   .btn-row { flex-direction: column; width: 100%; }
   .btn-row > * { width: 100% !important; text-align: center; justify-content: center; }
   .hide-xs { display: none !important; }
+}
+
+/* ── Text overflow protection ─────────────────────────── */
+.card, .card-hover {
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.truncate-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }

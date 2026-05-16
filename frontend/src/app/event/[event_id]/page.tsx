@@ -3,32 +3,39 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { useEvent, useEventAttendances } from "@/hooks/useContract";
 import { shortAddr, formatDate } from "@/lib/utils";
+import { useDisplayName } from "@/hooks/useNickname";
 
-const VERDICT_STYLE: Record<string, string> = {
-  valid:        "badge-valid",
-  invalid:      "badge-invalid",
-  insufficient: "badge-insufficient",
+function AttendeeName({ address }: { address: string }) {
+  const name = useDisplayName(address);
+  return <>{name || shortAddr(address)}</>;
+}
+
+const VERDICT_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
+  valid:        { bg: "#D1FAE5", color: "#065F46", dot: "#10B981" },
+  invalid:      { bg: "#FEE2E2", color: "#991B1B", dot: "#EF4444" },
+  insufficient: { bg: "#FEF3C7", color: "#92400E", dot: "#F59E0B" },
 };
 
 export default function EventDetailPage({ params }: { params: { event_id: string } }) {
-  const { event_id } = params;
-  const { event,      loading: evLoading  } = useEvent(event_id);
-  const { attendances, loading: attLoading } = useEventAttendances(
-    event ? Number(event.event_id) : null
-  );
+  const { event_id }   = params;
+  const { event, loading: evLoading }       = useEvent(event_id);
+  const { attendances, loading: attLoading } = useEventAttendances(event ? Number(event.event_id) : null);
 
-  const spotsLeft = event ? event.max_attendees - event.attendee_count : 0;
-  const fillPct   = event ? Math.min(100, (event.attendee_count / event.max_attendees) * 100) : 0;
+  const verified     = attendances.filter(a => a.verdict === "valid");
+  const insufficient = attendances.filter(a => a.verdict === "insufficient");
+  const invalid      = attendances.filter(a => a.verdict === "invalid");
+  const spotsLeft    = event ? event.max_attendees - event.attendee_count : 0;
+  const fillPct      = event ? Math.min(100, (event.attendee_count / event.max_attendees) * 100) : 0;
 
   if (evLoading) {
     return (
-      <div className="min-h-dvh flex flex-col">
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <main className="flex-1 px-4 sm:px-6 py-10 max-w-4xl mx-auto w-full space-y-4">
-          <div className="skeleton h-4 w-24" />
-          <div className="skeleton h-8 w-2/3" />
-          <div className="skeleton h-4 w-full" />
-          <div className="skeleton h-40 w-full mt-6" />
+        <main style={{ flex: 1, maxWidth: 1100, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
+          <div className="skeleton" style={{ height: 16, width: 120, marginBottom: 24 }} />
+          <div className="skeleton" style={{ height: 36, width: "60%", marginBottom: 12 }} />
+          <div className="skeleton" style={{ height: 16, width: "80%", marginBottom: 8 }} />
+          <div className="skeleton" style={{ height: 200, marginTop: 24 }} />
         </main>
       </div>
     );
@@ -36,14 +43,15 @@ export default function EventDetailPage({ params }: { params: { event_id: string
 
   if (!event) {
     return (
-      <div className="min-h-dvh flex flex-col">
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center">
-            <p className="font-mono text-4xl text-ink-600 mb-4">#{event_id.padStart(4,"0")}</p>
-            <h2 className="font-display text-xl text-ink-100 mb-2">Event not found</h2>
-            <p className="text-sm text-ink-400 mb-6">This event ID doesn't exist yet.</p>
-            <Link href="/events" className="btn-secondary">Browse events</Link>
+        <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 48, color: "var(--ink-6)", marginBottom: 16 }}>
+              #{event_id.padStart(4,"0")}
+            </p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Event not found</h2>
+            <Link href="/events" className="btn-secondary" style={{ fontSize: 13 }}>Back to events</Link>
           </div>
         </main>
       </div>
@@ -51,152 +59,238 @@ export default function EventDetailPage({ params }: { params: { event_id: string
   }
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <Navbar />
-      <main className="flex-1 px-4 sm:px-6 py-10 max-w-4xl mx-auto w-full">
+      <main style={{ flex: 1, maxWidth: 1100, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
 
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-mono text-ink-500 mb-8 animate-fade-up">
-          <Link href="/events" className="hover:text-violet-light transition-colors">Events</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "var(--ink-4)", marginBottom: 28 }}>
+          <Link href="/events" style={{ color: "var(--teal)", textDecoration: "none" }}>Events</Link>
           <span>/</span>
-          <span className="text-ink-300">#{String(event.event_id).padStart(4,"0")}</span>
+          <span>#{String(event.event_id).padStart(4,"0")}</span>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 24 }}>
 
-          {/* Left: Main info */}
-          <div className="lg:col-span-2 space-y-5 animate-fade-up">
+          {/* Left: Main info + gallery */}
+          <div style={{ minWidth: 0 }}>
+            {/* Cover image */}
+            {event.image_url && (
+              <div style={{ borderRadius: 14, overflow: "hidden", marginBottom: 20, border: "1px solid var(--ink-6)", background: "#000" }}>
+                <img
+                  src={event.image_url}
+                  alt={event.name}
+                  style={{ width: "100%", height: "auto", display: "block", maxHeight: 400 }}
+                />
+              </div>
+            )}
+
             {/* Header */}
-            <div>
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <span className="font-mono text-xs text-violet/60">
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: "var(--teal)" }}>
                   #{String(event.event_id).padStart(4,"0")}
                 </span>
-                {event.is_verified_org && <span className="badge-verified">verified organizer</span>}
-                {event.is_closed        && <span className="badge-closed">closed</span>}
-                {!event.is_closed && spotsLeft === 0 && <span className="badge-invalid">full</span>}
+                {event.is_closed        && <span className="badge badge-closed">closed</span>}
+                {!event.is_closed && spotsLeft === 0 && <span className="badge badge-invalid">full</span>}
               </div>
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink-50 leading-snug mb-3">
+              <h1 style={{ fontSize: "clamp(22px,3vw,30px)", fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1.2, marginBottom: 10, overflowWrap: "anywhere" }}>
                 {event.name}
               </h1>
-              <p className="text-sm text-ink-300 leading-relaxed">{event.description}</p>
+              <p style={{ fontSize: 14, color: "var(--ink-3)", lineHeight: 1.7, overflowWrap: "anywhere" }}>{event.description}</p>
             </div>
 
-            {/* Attendance list */}
+            {/* Claim CTA */}
+            {!event.is_closed && spotsLeft > 0 && (
+              <Link href={`/claim?event_id=${event.event_id}`} className="btn-primary" style={{ fontSize: 14, marginBottom: 28, display: "inline-flex" }}>
+                Claim attendance →
+              </Link>
+            )}
+
+            {/* Attendance gallery */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-xs font-mono uppercase tracking-wider text-ink-400">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-.01em" }}>
                   Attendance records
-                  {attendances.length > 0 && (
-                    <span className="ml-2 text-ink-500">({attendances.length})</span>
-                  )}
-                </p>
-                {!event.is_closed && spotsLeft > 0 && (
-                  <Link href={`/claim?event_id=${event.event_id}`}
-                    className="text-xs font-mono text-violet-light hover:underline">
-                    + Claim attendance
-                  </Link>
-                )}
+                </h2>
+                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
+                  {attendances.length} total
+                </span>
               </div>
 
               {attLoading && (
-                <div className="space-y-2">
-                  {[1,2].map(i => <div key={i} className="skeleton h-16 w-full" />)}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[1,2].map(i => <div key={i} className="skeleton" style={{ height: 80 }} />)}
                 </div>
               )}
 
               {!attLoading && attendances.length === 0 && (
-                <div className="border border-dashed border-ink-700 p-6 text-center">
-                  <p className="text-xs text-ink-500">No verified attendances yet.</p>
+                <div style={{ textAlign: "center", padding: "32px 0", border: "2px dashed var(--ink-6)", borderRadius: 12 }}>
+                  <p style={{ fontSize: 13, color: "var(--ink-4)" }}>No attendance claims yet.</p>
+                  {!event.is_closed && (
+                    <Link href={`/claim?event_id=${event.event_id}`} style={{ fontSize: 12, color: "var(--teal)", marginTop: 8, display: "block" }}>
+                      Be the first to claim →
+                    </Link>
+                  )}
                 </div>
               )}
 
               {!attLoading && attendances.length > 0 && (
-                <div className="space-y-3">
-                  {attendances.filter(a => a.verdict === "valid").map(att => (
-                    <div key={Number(att.attendance_id)} className="card p-4">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <p className="text-[10px] font-mono text-ink-500 mb-1">
-                            #{String(att.attendance_id).padStart(4,"0")} · {shortAddr(att.attendee)}
-                          </p>
-                          <a href={att.proof_url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-ink-300 hover:text-violet-light transition-colors truncate block line-clamp-1">
-                            {att.proof_url}
-                          </a>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* Verified first */}
+                  {[...verified, ...insufficient, ...invalid].map(att => {
+                    const vc = VERDICT_CONFIG[att.verdict] ?? VERDICT_CONFIG.invalid;
+                    return (
+                      <div key={Number(att.attendance_id)} className="card" style={{ padding: "14px 18px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "var(--ink-4)" }}>
+                                #{String(att.attendance_id).padStart(4,"0")}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
+                                <AttendeeName address={att.attendee} />
+                              </span>
+                              <div style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 20,
+                                background: vc.bg, color: vc.color,
+                              }}>
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: vc.dot }} />
+                                {att.verdict}
+                              </div>
+                              {att.cert_minted && (
+                                <Link href={`/certificate/${att.attendance_id}`} style={{
+                                  fontSize: 10, fontWeight: 600, color: "#6366F1",
+                                  background: "#EEF2FF", padding: "1px 7px", borderRadius: 20, textDecoration: "none",
+                                }}>
+                                  ✓ cert →
+                                </Link>
+                              )}
+                            </div>
+                            <a href={att.proof_url} target="_blank" rel="noopener noreferrer" style={{
+                              fontSize: 11, color: "var(--ink-4)", display: "block",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              maxWidth: "100%",
+                            }}>
+                              {att.proof_url}
+                            </a>
+                            {att.reason && (
+                              <p style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic", marginTop: 6, lineHeight: 1.5 }}>
+                                "{att.reason}"
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.02em" }}>
+                              {att.confidence}%
+                            </div>
+                          </div>
                         </div>
-                        <span className={VERDICT_STYLE[att.verdict] ?? "badge-invalid"}>
-                          {att.verdict}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-20 h-0.5 bg-ink-700">
-                          <div className="h-full bg-violet/60" style={{ width: `${att.confidence}%` }} />
+                        {/* Confidence bar */}
+                        <div className="conf-track" style={{ marginTop: 10 }}>
+                          <div className="conf-fill" style={{ width: `${att.confidence}%` }} />
                         </div>
-                        <span className="text-[10px] font-mono text-ink-500">{att.confidence}%</span>
                       </div>
-                      {att.reason && (
-                        <p className="mt-2 text-xs text-ink-400 italic line-clamp-2">"{att.reason}"</p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right: Stats + Actions */}
-          <div className="space-y-4 animate-fade-up delay-100">
-
+          {/* Right: Details */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Capacity */}
-            <div className="card p-5">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-ink-500 mb-3">Capacity</p>
-              <p className="font-display text-5xl font-bold text-violet-light leading-none mb-3">
-                {event.attendee_count}
-                <span className="text-xl text-ink-500 font-normal">/{event.max_attendees}</span>
-              </p>
-              <div className="h-1.5 bg-ink-700 overflow-hidden mb-1">
-                <div className="h-full bg-gradient-to-r from-violet to-violet-light"
-                  style={{ width: `${fillPct}%` }} />
+            <div className="card" style={{ padding: "20px 22px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 10 }}>
+                Capacity
               </div>
-              <p className="text-[10px] font-mono text-ink-500">
+              <div style={{ fontSize: 36, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.03em", lineHeight: 1, marginBottom: 10 }}>
+                {event.attendee_count}
+                <span style={{ fontSize: 18, color: "var(--ink-4)", fontWeight: 400 }}>/{event.max_attendees}</span>
+              </div>
+              <div className="conf-track" style={{ marginBottom: 6 }}>
+                <div className="conf-fill" style={{ width: `${fillPct}%` }} />
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>
                 {spotsLeft > 0 ? `${spotsLeft} spots remaining` : "Event is full"}
-              </p>
+              </div>
             </div>
 
             {/* Details */}
-            <div className="card p-5 space-y-4">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-ink-500">Details</p>
-              {[
-                { label: "Organizer", value: shortAddr(event.organizer), mono: true },
-                { label: "Date",      value: formatDate(event.event_date), mono: true },
-                { label: "Location",  value: event.location },
-                { label: "Status",    value: event.is_closed ? "closed" : "active", mono: true,
-                  accent: event.is_closed ? "text-rust" : "text-sage-light" },
-              ].map(row => (
-                <div key={row.label}>
-                  <p className="text-[10px] text-ink-500 mb-0.5">{row.label}</p>
-                  <p className={`text-xs ${row.mono ? "font-mono" : ""} ${row.accent ?? "text-ink-200"}`}>
-                    {row.value}
-                  </p>
+            <div className="card" style={{ padding: "20px 22px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 14 }}>
+                Details
+              </div>
+
+              {/* Organizer */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 3 }}>Organizer</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", overflowWrap: "anywhere" }}>
+                  <AttendeeName address={event.organizer} />
                 </div>
-              ))}
+              </div>
+
+              {/* Date + Time */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 3 }}>Date & Time</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", fontFamily: "'JetBrains Mono',monospace" }}>
+                  {formatDate(event.event_date)}{event.event_time ? ` · ${event.event_time}` : ""}
+                </div>
+              </div>
+
+              {/* Location + Maps */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Location</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 4, overflowWrap: "anywhere" }}>
+                  {event.location}
+                </div>
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: "var(--teal)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 10 }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                  Open in Maps
+                </a>
+                {/* Google Maps embed */}
+                <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--ink-6)" }}>
+                  <iframe
+                    title="Event location map"
+                    width="100%"
+                    height="200"
+                    style={{ display: "block", border: "none" }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(event.location)}&output=embed&z=15`}
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 3 }}>Status</div>
+                <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono',monospace", color: event.is_closed ? "var(--verify-red)" : "var(--verify-green)" }}>
+                  {event.is_closed ? "Closed" : "Active"}
+                </div>
+              </div>
             </div>
 
-            {/* Actions */}
             {!event.is_closed && spotsLeft > 0 && (
-              <Link href={`/claim?event_id=${event.event_id}`}
-                className="btn-primary w-full text-center text-sm py-3">
+              <Link href={`/claim?event_id=${event.event_id}`} className="btn-primary" style={{ textAlign: "center", fontSize: 14 }}>
                 Claim attendance
               </Link>
             )}
 
-            <Link href="/events"
-              className="flex items-center gap-1 text-xs font-mono text-ink-500 hover:text-violet-light transition-colors">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to events
+            <Link href="/events" style={{
+              display: "flex", alignItems: "center", gap: 4,
+              fontSize: 12, color: "var(--ink-4)", textDecoration: "none",
+            }}>
+              ← Back to events
             </Link>
           </div>
         </div>

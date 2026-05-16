@@ -5,13 +5,13 @@ import { useWallet } from "@/hooks/useWallet";
 import { shortAddr } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { ensureNetwork, getEthereum, CHAIN } from "@/lib/genlayer";
+import { useNickname } from "@/hooks/useNickname";
 
 const LINKS = [
   { href: "/events",         label: "Explore"      },
   { href: "/create-event",   label: "Host"         },
   { href: "/claim",          label: "Claim"        },
-  { href: "/apply-verified", label: "Get Verified" },
-  { href: "/my-events",      label: "My Events"    },
+  { href: "/dashboard",      label: "Dashboard"    },
 ];
 
 const FingerprintLogo = ({ size = 28 }: { size?: number }) => (
@@ -65,6 +65,7 @@ function NetworkBanner() {
 
 function WalletButton() {
   const { address, isConnected, isConnecting, connect, disconnect } = useWallet();
+  const { nickname } = useNickname(address);
   if (!isConnected) {
     return (
       <button onClick={connect} disabled={isConnecting} className="btn-primary nav-wallet"
@@ -78,12 +79,12 @@ function WalletButton() {
       display: "flex", alignItems: "center", gap: 7,
       padding: "7px 14px", borderRadius: 10,
       background: "var(--surface)", border: "1.5px solid var(--ink-6)",
-      color: "var(--ink-2)", fontSize: 13, fontWeight: 500,
-      fontFamily: "'JetBrains Mono',monospace", cursor: "pointer",
-      boxShadow: "var(--shadow-sm)",
+      color: "var(--ink-2)", fontSize: 13, fontWeight: nickname ? 600 : 500,
+      fontFamily: nickname ? "inherit" : "'JetBrains Mono',monospace",
+      cursor: "pointer", boxShadow: "var(--shadow-sm)",
     }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--teal)" }} />
-      {shortAddr(address!)}
+      {nickname || shortAddr(address!)}
     </button>
   );
 }

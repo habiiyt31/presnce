@@ -14,8 +14,11 @@ function isValidContract(): boolean {
 
 // ─── useStats ─────────────────────────────────────────────────
 export function useStats() {
-  const [stats, setStats]   = useState<ContractStats | null>(null);
+  const [stats, setStats]     = useState<ContractStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const fetchStats = useCallback(async () => {
     if (!isValidContract()) { setLoading(false); return; }
@@ -26,8 +29,16 @@ export function useStats() {
         address:      CONTRACT_ADDRESS as `0x${string}`,
         functionName: "get_stats",
         args:         [],
-      });
-      setStats(result as unknown as ContractStats);
+      }) as any;
+      if (result && typeof result === "object") {
+        const n: any = {};
+        for (const [k, v] of Object.entries(result)) {
+          n[k] = typeof v === "bigint" ? Number(v) : v;
+        }
+        setStats(n as ContractStats);
+      } else {
+        setStats(result as ContractStats);
+      }
     } catch (e) {
       console.error("get_stats:", e);
     } finally {
@@ -35,8 +46,54 @@ export function useStats() {
     }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => {
+    if (!mounted) return;
+    fetchStats();
+    const t        = setTimeout(fetchStats, 3000);
+    const interval = setInterval(fetchStats, 15000);
+    return () => { clearTimeout(t); clearInterval(interval); };
+  }, [mounted, fetchStats]);
+
   return { stats, loading, refetch: fetchStats };
+}
+
+// ─── usePlatformCounts (fallback when get_stats fails) ────────
+export function usePlatformCounts() {
+  const [counts, setCounts] = useState({ attendances: 0, certificates: 0 });
+
+  useEffect(() => {
+    (async () => {
+      if (!isValidContract()) return;
+      const client = getReadClient();
+      let att = 0;
+      for (let i = 0; i < 500; i++) {
+        try {
+          const r = await client.readContract({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            functionName: "get_attendance",
+            args: [i] as any,
+          }) as any;
+          if (!r || r.attendance_id === undefined) break;
+          att++;
+        } catch { break; }
+      }
+      let cert = 0;
+      for (let i = 0; i < 500; i++) {
+        try {
+          const r = await client.readContract({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            functionName: "get_certificate",
+            args: [i] as any,
+          }) as any;
+          if (!r || r.token_id === undefined) break;
+          cert++;
+        } catch { break; }
+      }
+      setCounts({ attendances: att, certificates: cert });
+    })();
+  }, []);
+
+  return counts;
 }
 
 // ─── useEvent ─────────────────────────────────────────────────

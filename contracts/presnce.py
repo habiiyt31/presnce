@@ -26,22 +26,30 @@ def _safe_str(value: typing.Any, max_len: int = 500) -> str:
     return str(value).strip()[:max_len]
 
 
+def _fetch_proof(url: str) -> str:
+    try:
+        html = gl.nondet.web.get(url).body.decode("utf-8")
+        return html[:3000] if html else "(empty)"
+    except Exception:
+        return "(unreachable)"
+
+
 # ─── Storage dataclasses ───────────────────────────────────────
 
 @allow_storage
 @dataclass
 class EventRecord:
-    event_id:        u256
-    organizer:       Address
-    name:            str
-    description:     str
-    location:        str
-    event_date:      str
-    max_attendees:   u256
-    attendee_count:  u256
-    is_verified_org: bool
-    is_closed:       bool
-    profile_url:     str
+    event_id:       u256
+    organizer:      Address
+    name:           str
+    description:    str
+    location:       str
+    event_date:     str
+    event_time:     str
+    image_url:      str
+    max_attendees:  u256
+    attendee_count: u256
+    is_closed:      bool
 
 
 @allow_storage
@@ -51,20 +59,11 @@ class AttendanceRecord:
     event_id:      u256
     attendee:      Address
     proof_url:     str
-    verdict:       str       # "valid" | "invalid" | "insufficient"
+    verdict:       str
     confidence:    u256
     reason:        str
     is_revoked:    bool
     cert_minted:   bool
-
-
-@allow_storage
-@dataclass
-class OrganizerProfile:
-    organizer:   Address
-    profile_url: str
-    is_verified: bool
-    event_count: u256
 
 
 @allow_storage
@@ -94,49 +93,35 @@ class _EOA:
 
 class Presnce(gl.Contract):
 
-    # DynArrays — same pattern as OriginMark
-    events:      DynArray[EventRecord]
-    attendances: DynArray[AttendanceRecord]
-    organizers:  DynArray[OrganizerProfile]
+    events:       DynArray[EventRecord]
+    attendances:  DynArray[AttendanceRecord]
+    certificates: TreeMap[u256, AttendanceCertificate]
 
-    # TreeMaps — NFTs + player stats, same pattern as MochiHallOfShame
-    certificates:        TreeMap[u256, AttendanceCertificate]
-    player_event_count:  TreeMap[Address, u256]
-    player_cert_count:   TreeMap[Address, u256]
+    player_event_count: TreeMap[Address, u256]
+    player_cert_count:  TreeMap[Address, u256]
 
-    # Counters
     event_count:       u256
     attendance_count:  u256
-    organizer_count:   u256
     certificate_count: u256
 
-    # Config
     owner:            Address
-    create_fee:       u256   # 0.01 GEN
-    claim_fee:        u256   # 0.005 GEN
-    verify_fee:       u256   # 0.02 GEN
-    platform_bps:     u256   # 500 = 5%
+    create_fee:       u256
+    claim_fee:        u256
+    platform_bps:     u256
     platform_balance: u256
 
     def __init__(self):
         self.owner             = gl.message.sender_address
-        self.create_fee        = u256(10_000_000_000_000_000)  # 0.01 GEN
-        self.claim_fee         = u256(5_000_000_000_000_000)   # 0.005 GEN
-        self.verify_fee        = u256(20_000_000_000_000_000)  # 0.02 GEN
+        self.create_fee        = u256(10_000_000_000_000_000)
+        self.claim_fee         = u256(5_000_000_000_000_000)
         self.platform_bps      = u256(500)
         self.platform_balance  = u256(0)
+        self.event_count       = u256(0)
+        self.attendance_count  = u256(0)
         self.certificate_count = u256(0)
-
-    # ── Internal helpers ───────────────────────────────────────
 
     def _platform_cut(self, amount: u256) -> u256:
         return (amount * self.platform_bps) // u256(10_000)
-
-    def _get_organizer_idx(self, addr: Address) -> int:
-        for i in range(int(self.organizer_count)):
-            if self.organizers[i].organizer == addr:
-                return i
-        return -1
 
     # ── Write: Create Event ────────────────────────────────────
 
@@ -147,44 +132,23 @@ class Presnce(gl.Contract):
         description:   str,
         location:      str,
         event_date:    str,
+        event_time:    str,
+        image_url:     str,
         max_attendees: u256,
     ) -> str:
         organizer = gl.message.sender_address
         paid      = gl.message.value
 
-        assert paid >= self.create_fee,       "Event creation fee 0.01 GEN required"
-        assert len(name.strip()) >= 3,        "Name too short (min 3 chars)"
-        assert len(description.strip()) >= 20,"Description too short (min 20 chars)"
-        assert len(location.strip()) >= 2,    "Location required"
-        assert len(event_date.strip()) >= 8,  "Event date required"
-        assert int(max_attendees) > 0,        "Max attendees must be > 0"
+        assert paid >= self.create_fee,        "Event creation fee 0.01 GEN required"
+        assert len(name.strip()) >= 3,         "Name too short (min 3 chars)"
+        assert len(description.strip()) >= 20, "Description too short (min 20 chars)"
+        assert len(location.strip()) >= 2,     "Location required"
+        assert len(event_date.strip()) >= 8,   "Event date required"
+        assert int(max_attendees) > 0,         "Max attendees must be > 0"
 
         self.platform_balance = self.platform_balance + paid
 
-        # Check organizer profile
-        org_idx     = self._get_organizer_idx(organizer)
-        is_verified = False
-        profile_url = ""
-
-        if org_idx >= 0:
-            is_verified = bool(self.organizers[org_idx].is_verified)
-            profile_url = str(self.organizers[org_idx].profile_url)
-            self.organizers[org_idx].event_count = (
-                self.organizers[org_idx].event_count + u256(1)
-            )
-        else:
-            profile = gl.storage.inmem_allocate(
-                OrganizerProfile,
-                organizer,
-                "",
-                False,
-                u256(1),
-            )
-            self.organizers.append(profile)
-            self.organizer_count = self.organizer_count + u256(1)
-
         event_id = self.event_count
-
         rec = gl.storage.inmem_allocate(
             EventRecord,
             event_id,
@@ -193,101 +157,23 @@ class Presnce(gl.Contract):
             description,
             location,
             event_date,
+            event_time,
+            image_url,
             max_attendees,
             u256(0),
-            is_verified,
             False,
-            profile_url,
         )
         self.events.append(rec)
         self.event_count = self.event_count + u256(1)
 
-        # Track player stats
         self.player_event_count[organizer] = u256(
             int(self.player_event_count.get(organizer, u256(0))) + 1
         )
 
         return json.dumps({
-            "success":     True,
-            "event_id":    int(event_id),
-            "name":        name,
-            "is_verified": is_verified,
-        })
-
-    # ── Write: Apply Verified Organizer ───────────────────────
-
-    @gl.public.write.payable
-    def apply_verified_organizer(self, profile_url: str) -> str:
-        organizer   = gl.message.sender_address
-        paid        = gl.message.value
-
-        assert paid >= self.verify_fee,       "Verification fee 0.02 GEN required"
-        assert len(profile_url.strip()) >= 8, "Profile URL required"
-
-        self.platform_balance = self.platform_balance + paid
-
-        profile_url_val = profile_url
-
-        # Use eq_principle for organizer verification — same as OriginMark
-        def judge_organizer() -> str:
-            try:
-                html    = gl.nondet.web.get(profile_url_val).body.decode("utf-8")
-                snippet = html[:3000] if html else "(empty)"
-            except Exception:
-                snippet = "(unreachable)"
-
-            prompt = (
-                "You are a verification judge for Presnce, an on-chain event platform.\n\n"
-                "An organizer is applying for a Verified badge.\n"
-                "Profile URL: " + profile_url_val + "\n"
-                "Page content preview:\n" + snippet + "\n\n"
-                "Verification rules:\n"
-                "1. APPROVE if the page shows a real person or organization with credible online presence\n"
-                "2. APPROVE if they have a professional website, Twitter/X, LinkedIn, or event history\n"
-                "3. REJECT if URL is unreachable, empty, or clearly fake/spam\n"
-                "4. REJECT if no meaningful identity or reputation can be determined\n\n"
-                "Reply ONLY valid JSON, no markdown:\n"
-                "{\"approved\":true,\"reason\":\"short reason\",\"confidence\":85}"
-            )
-            raw = gl.nondet.exec_prompt(prompt)
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            return json.dumps(json.loads(raw), sort_keys=True)
-
-        result_str = gl.eq_principle.prompt_comparative(
-            judge_organizer,
-            "The approved boolean field must be identical"
-        )
-        result   = json.loads(result_str)
-        approved = bool(result.get("approved", False))
-        reason   = _safe_str(result.get("reason", ""), 200)
-        confidence = max(0, min(100, int(result.get("confidence", 0))))
-
-        org_idx = self._get_organizer_idx(organizer)
-        if org_idx >= 0:
-            self.organizers[org_idx].profile_url = profile_url
-            if approved:
-                self.organizers[org_idx].is_verified = True
-                # Update all events by this organizer
-                for i in range(int(self.event_count)):
-                    if self.events[i].organizer == organizer:
-                        self.events[i].is_verified_org = True
-                        self.events[i].profile_url     = profile_url
-        else:
-            profile = gl.storage.inmem_allocate(
-                OrganizerProfile,
-                organizer,
-                profile_url,
-                approved,
-                u256(0),
-            )
-            self.organizers.append(profile)
-            self.organizer_count = self.organizer_count + u256(1)
-
-        return json.dumps({
-            "success":    True,
-            "approved":   approved,
-            "confidence": confidence,
-            "reason":     reason,
+            "success":  True,
+            "event_id": int(event_id),
+            "name":     name,
         })
 
     # ── Write: Claim Attendance ────────────────────────────────
@@ -298,13 +184,13 @@ class Presnce(gl.Contract):
         paid     = gl.message.value
         eid      = int(event_id)
 
-        assert paid >= self.claim_fee,                          "Claim fee 0.005 GEN required"
-        assert eid < int(self.event_count),                     "Event not found"
-        assert len(proof_url.strip()) >= 8,                     "Proof URL required"
+        assert paid >= self.claim_fee,                         "Claim fee 0.005 GEN required"
+        assert eid < int(self.event_count),                    "Event not found"
+        assert len(proof_url.strip()) >= 8,                    "Proof URL required"
 
         ev = self.events[eid]
-        assert not bool(ev.is_closed),                          "Event is closed"
-        assert int(ev.attendee_count) < int(ev.max_attendees),  "Event is full"
+        assert not bool(ev.is_closed),                         "Event is closed"
+        assert int(ev.attendee_count) < int(ev.max_attendees), "Event is full"
 
         self.platform_balance = self.platform_balance + paid
 
@@ -313,13 +199,8 @@ class Presnce(gl.Contract):
         event_date_val = str(ev.event_date)
         proof_url_val  = proof_url
 
-        # Use run_nondet_unsafe — same pattern as MochiHallOfShame
         def leader_fn() -> dict:
-            try:
-                html    = gl.nondet.web.get(proof_url_val).body.decode("utf-8")
-                snippet = html[:3000] if html else "(empty)"
-            except Exception:
-                snippet = "(unreachable)"
+            snippet = _fetch_proof(proof_url_val)
 
             prompt = (
                 "You are an attendance verification judge on Presnce, an on-chain event platform.\n\n"
@@ -330,8 +211,8 @@ class Presnce(gl.Contract):
                 "Attendee submitted proof URL: " + proof_url_val + "\n"
                 "Page content preview:\n" + snippet + "\n\n"
                 "Verdict rules:\n"
-                "- \"valid\": proof clearly shows attendance (ticket, social post mentioning event, check-in, RSVP confirmation)\n"
-                "- \"insufficient\": page loads but evidence is ambiguous or only partially related\n"
+                "- \"valid\": proof clearly shows attendance (tweet mentioning event, ticket, RSVP, check-in)\n"
+                "- \"insufficient\": content loads but evidence is ambiguous or only partially related\n"
                 "- \"invalid\": proof is unrelated, unreachable, or does not confirm attendance\n\n"
                 "Reply ONLY valid JSON, no markdown:\n"
                 "{\"verdict\":\"valid\",\"confidence\":85,\"reason\":\"short reason\"}"
@@ -368,7 +249,6 @@ class Presnce(gl.Contract):
         reason     = result["reason"]
 
         aid = self.attendance_count
-
         rec = gl.storage.inmem_allocate(
             AttendanceRecord,
             aid,
@@ -396,25 +276,24 @@ class Presnce(gl.Contract):
             "reason":        reason,
         })
 
-    # ── Write: Mint Certificate NFT ───────────────────────────
+    # ── Write: Mint Certificate ────────────────────────────────
 
     @gl.public.write
     def mint_certificate(self, attendance_id: u256) -> str:
-        aid      = int(attendance_id)
-        caller   = gl.message.sender_address
+        aid    = int(attendance_id)
+        caller = gl.message.sender_address
 
-        assert aid < int(self.attendance_count),        "Attendance not found"
+        assert aid < int(self.attendance_count), "Attendance not found"
         att = self.attendances[aid]
 
-        assert att.attendee == caller,                  "Only attendee can mint"
-        assert str(att.verdict) == "valid",             "Only valid attendance can be minted"
-        assert not bool(att.cert_minted),               "Certificate already minted"
+        assert att.attendee == caller,           "Only attendee can mint"
+        assert str(att.verdict) == "valid",      "Only valid attendance can be minted"
+        assert not bool(att.cert_minted),        "Already minted"
 
         eid = int(att.event_id)
         ev  = self.events[eid]
 
         token_id = self.certificate_count
-
         cert = AttendanceCertificate(
             token_id,
             u256(aid),
@@ -425,23 +304,22 @@ class Presnce(gl.Contract):
             str(ev.location),
             att.confidence,
         )
-        self.certificates[token_id]    = cert
-        self.certificate_count         = self.certificate_count + u256(1)
+        self.certificates[token_id]       = cert
+        self.certificate_count            = self.certificate_count + u256(1)
         self.attendances[aid].cert_minted = True
 
-        # Track player stats
         self.player_cert_count[caller] = u256(
             int(self.player_cert_count.get(caller, u256(0))) + 1
         )
 
         return json.dumps({
-            "success":       True,
-            "token_id":      int(token_id),
-            "attendance_id": aid,
-            "event_name":    str(ev.name),
-            "event_date":    str(ev.event_date),
-            "event_location":str(ev.location),
-            "confidence":    int(att.confidence),
+            "success":        True,
+            "token_id":       int(token_id),
+            "attendance_id":  aid,
+            "event_name":     str(ev.name),
+            "event_date":     str(ev.event_date),
+            "event_location": str(ev.location),
+            "confidence":     int(att.confidence),
         })
 
     # ── Write: Close Event ─────────────────────────────────────
@@ -496,17 +374,17 @@ class Presnce(gl.Contract):
             return {}
         ev = self.events[eid]
         return {
-            "event_id":        int(ev.event_id),
-            "organizer":       ev.organizer.as_hex,
-            "name":            str(ev.name),
-            "description":     str(ev.description),
-            "location":        str(ev.location),
-            "event_date":      str(ev.event_date),
-            "max_attendees":   int(ev.max_attendees),
-            "attendee_count":  int(ev.attendee_count),
-            "is_verified_org": bool(ev.is_verified_org),
-            "is_closed":       bool(ev.is_closed),
-            "profile_url":     str(ev.profile_url),
+            "event_id":       int(ev.event_id),
+            "organizer":      ev.organizer.as_hex,
+            "name":           str(ev.name),
+            "description":    str(ev.description),
+            "location":       str(ev.location),
+            "event_date":     str(ev.event_date),
+            "event_time":     str(ev.event_time),
+            "image_url":      str(ev.image_url),
+            "max_attendees":  int(ev.max_attendees),
+            "attendee_count": int(ev.attendee_count),
+            "is_closed":      bool(ev.is_closed),
         }
 
     @gl.public.view
@@ -593,32 +471,6 @@ class Presnce(gl.Contract):
                 result.append(int(cert.token_id))
         return result
 
-    # ── View: Organizer ────────────────────────────────────────
-
-    @gl.public.view
-    def get_organizer(self, addr: str) -> dict:
-        target  = Address(addr)
-        org_idx = self._get_organizer_idx(target)
-        if org_idx < 0:
-            return {}
-        org = self.organizers[org_idx]
-        return {
-            "organizer":   org.organizer.as_hex,
-            "profile_url": str(org.profile_url),
-            "is_verified": bool(org.is_verified),
-            "event_count": int(org.event_count),
-        }
-
-    # ── View: Player stats ─────────────────────────────────────
-
-    @gl.public.view
-    def get_player_stats(self, addr: str) -> dict:
-        player = Address(addr)
-        return {
-            "events_created": int(self.player_event_count.get(player, u256(0))),
-            "certs_earned":   int(self.player_cert_count.get(player, u256(0))),
-        }
-
     # ── View: Stats ────────────────────────────────────────────
 
     @gl.public.view
@@ -627,14 +479,24 @@ class Presnce(gl.Contract):
             "total_events":       int(self.event_count),
             "total_attendances":  int(self.attendance_count),
             "total_certificates": int(self.certificate_count),
-            "total_organizers":   int(self.organizer_count),
             "create_fee_wei":     int(self.create_fee),
             "claim_fee_wei":      int(self.claim_fee),
-            "verify_fee_wei":     int(self.verify_fee),
-            "platform_fee_pct":   int(self.platform_bps) / 100,
+            "platform_bps":       int(self.platform_bps),
             "platform_balance":   int(self.platform_balance),
             "owner":              self.owner.as_hex,
         }
+
+    @gl.public.view
+    def total_events(self) -> u256:
+        return self.event_count
+
+    @gl.public.view
+    def total_attendances(self) -> u256:
+        return self.attendance_count
+
+    @gl.public.view
+    def total_certificates(self) -> u256:
+        return self.certificate_count
 
     @gl.public.view
     def get_owner(self) -> str:

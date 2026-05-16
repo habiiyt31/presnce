@@ -12,12 +12,10 @@ export default function EventsPage() {
   const [query,      setQuery]    = useState("");
   const [sort,       setSort]     = useState<SortKey>("newest");
   const [showClosed, setShowC]    = useState(false);
-  const [verifiedOnly, setVerified] = useState(false);
 
   const filtered = useMemo(() => {
     let xs: EventRecord[] = [...events];
-    if (!showClosed)   xs = xs.filter(e => !e.is_closed);
-    if (verifiedOnly)  xs = xs.filter(e => e.is_verified_org);
+    if (!showClosed) xs = xs.filter(e => !e.is_closed);
     if (query.trim()) {
       const q = query.toLowerCase();
       xs = xs.filter(e =>
@@ -35,100 +33,107 @@ export default function EventsPage() {
       }
     });
     return xs;
-  }, [events, query, sort, showClosed, verifiedOnly]);
+  }, [events, query, sort, showClosed]);
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <Navbar />
-      <main className="flex-1 px-4 sm:px-6 py-10 max-w-6xl mx-auto w-full">
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-8 animate-fade-up">
+      <main style={{ flex: 1, maxWidth: 1100, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
           <div>
-            <p className="section-label mb-2">Public registry</p>
-            <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink-50">Explore events</h1>
-            <p className="text-sm text-ink-400 mt-2">AI-verified events on GenLayer. Claim your attendance.</p>
+            <p className="section-label" style={{ marginBottom: 8 }}>Public registry</p>
+            <h1 style={{ fontSize: "clamp(24px,4vw,36px)", fontWeight: 800, letterSpacing: "-.03em" }}>Explore events</h1>
+            <p style={{ fontSize: 14, color: "var(--ink-3)", marginTop: 6 }}>AI-verified events on GenLayer. Claim your attendance.</p>
           </div>
-          <div className="text-right">
-            <p className="font-mono text-2xl font-medium text-violet-light">{events.length}</p>
-            <p className="text-xs text-ink-400">total events</p>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.03em" }}>{events.length}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-4)" }}>total events</div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="mb-6 space-y-3 animate-fade-up delay-100">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input type="text" className="input-field flex-1"
+        <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <input type="text" className="input-field" style={{ flex: 1, minWidth: 200 }}
               placeholder="Search by name, location, or event ID..."
               value={query} onChange={e => setQuery(e.target.value)} />
-            <select className="input-field sm:w-40" value={sort} onChange={e => setSort(e.target.value as SortKey)}>
+            <select className="input-field" style={{ width: 160 }}
+              value={sort} onChange={e => setSort(e.target.value as SortKey)}>
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="spots">Most spots</option>
             </select>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-xs text-ink-400 cursor-pointer select-none">
-              <input type="checkbox" checked={verifiedOnly} onChange={e => setVerified(e.target.checked)}
-                className="w-3.5 h-3.5 accent-violet" />
-              Verified organizers only
-            </label>
-            <label className="flex items-center gap-2 text-xs text-ink-400 cursor-pointer select-none">
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--ink-3)", cursor: "pointer" }}>
               <input type="checkbox" checked={showClosed} onChange={e => setShowC(e.target.checked)}
-                className="w-3.5 h-3.5 accent-violet" />
+                style={{ width: 14, height: 14, accentColor: "var(--teal)", cursor: "pointer" }} />
               Show closed events
             </label>
-            <div className="flex-1" />
-            <button onClick={refetch} className="text-xs font-mono text-ink-400 hover:text-violet-light transition-colors px-2 py-1">
+            <div style={{ flex: 1 }} />
+            <button onClick={refetch} style={{
+              fontSize: 12, color: "var(--ink-4)", background: "none", border: "none",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+            }}>
               ↻ refresh
             </button>
           </div>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="border border-rust/30 bg-rust/5 text-rust p-4 rounded-sm text-sm mb-6">
+          <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "14px 16px", fontSize: 13, color: "#991B1B", marginBottom: 20 }}>
             Failed to load events: {error}
           </div>
         )}
 
+        {/* Loading skeleton */}
         {loading && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))", gap: 16 }}>
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="card p-5 space-y-3">
-                <div className="skeleton h-3 w-12" />
-                <div className="skeleton h-5 w-3/4" />
-                <div className="skeleton h-3 w-full" />
-                <div className="skeleton h-3 w-2/3" />
-                <div className="skeleton h-px w-full my-2" />
-                <div className="skeleton h-8 w-full" />
+              <div key={i} className="card" style={{ padding: 22 }}>
+                <div className="skeleton" style={{ height: 12, width: 60, marginBottom: 14 }} />
+                <div className="skeleton" style={{ height: 20, width: "80%", marginBottom: 8 }} />
+                <div className="skeleton" style={{ height: 12, width: "100%", marginBottom: 6 }} />
+                <div className="skeleton" style={{ height: 12, width: "60%", marginBottom: 20 }} />
+                <div className="skeleton" style={{ height: 1, marginBottom: 16 }} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div className="skeleton" style={{ height: 32 }} />
+                  <div className="skeleton" style={{ height: 32 }} />
+                </div>
               </div>
             ))}
           </div>
         )}
 
+        {/* Events grid */}
         {!loading && filtered.length > 0 && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-up delay-200">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))", gap: 16, alignItems: "start" }}>
             {filtered.map(event => (
               <EventCard key={Number(event.event_id)} event={event} showActions />
             ))}
           </div>
         )}
 
+        {/* No results */}
         {!loading && filtered.length === 0 && events.length > 0 && (
-          <div className="text-center py-20">
-            <p className="text-sm text-ink-400">No events match your filters.</p>
-            <button onClick={() => { setQuery(""); setShowC(false); setVerified(false); }}
-              className="mt-3 text-xs font-mono text-violet-light hover:underline">
-              clear filters
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{ fontSize: 14, color: "var(--ink-4)", marginBottom: 12 }}>No events match your filters.</p>
+            <button onClick={() => { setQuery(""); setShowC(false); }}
+              style={{ fontSize: 13, color: "var(--teal)", background: "none", border: "none", cursor: "pointer" }}>
+              Clear filters
             </button>
           </div>
         )}
 
+        {/* Empty state */}
         {!loading && events.length === 0 && !error && (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 border border-dashed border-ink-600 flex items-center justify-center mx-auto mb-6">
-              <div className="w-5 h-5 border border-ink-500" />
-            </div>
-            <h3 className="font-display text-lg text-ink-100 mb-2">No events yet</h3>
-            <p className="text-sm text-ink-400 mb-6">Be the first to host an event.</p>
+          <div style={{ textAlign: "center", padding: "64px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No events yet</h3>
+            <p style={{ fontSize: 14, color: "var(--ink-4)", marginBottom: 24 }}>Be the first to host an event on Presnce.</p>
             <a href="/create-event" className="btn-primary">Host an event</a>
           </div>
         )}

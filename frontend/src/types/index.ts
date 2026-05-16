@@ -5,9 +5,10 @@ export interface EventRecord {
   description:     string;
   location:        string;
   event_date:      string;
+  event_time:      string;
+  image_url:       string;
   max_attendees:   number;
   attendee_count:  number;
-  is_verified_org: boolean;
   is_closed:       boolean;
   profile_url:     string;
 }
@@ -54,7 +55,6 @@ export interface ContractStats {
   total_organizers:   number;
   create_fee_wei:     number;
   claim_fee_wei:      number;
-  verify_fee_wei:     number;
   platform_fee_pct:   number;
   platform_balance:   number;
   owner:              string;

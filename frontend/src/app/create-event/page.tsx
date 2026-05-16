@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { TxStatus } from "@/components/TxStatus";
@@ -8,6 +8,10 @@ import { toWei, getReadClient, CONTRACT_ADDRESS } from "@/lib/genlayer";
 import type { EventRecord } from "@/types";
 
 const CREATE_FEE = "0.01";
+const PINATA_JWT = process.env.NEXT_PUBLIC_PINATA_JWT || "";
+
+type TxState     = { status: "idle"|"pending"|"success"|"error"; hash?: string; message?: string; };
+type UploadState = { status: "idle"|"uploading"|"done"|"error"; message?: string; };
 
 const EXAMPLES = [
   {
@@ -15,48 +19,36 @@ const EXAMPLES = [
     description: "Monthly gathering for GenLayer builders and developers in Jakarta. We discuss Intelligent Contracts, share projects, and network. Food and drinks provided.",
     location: "Jakarta, Indonesia",
     event_date: "2026-06-15",
-    max_attendees: 50,
+    event_time: "18:00",
+    max_attendees: "50",
   },
   {
     name: "Web3 UX Workshop — Online",
-    description: "A hands-on workshop covering UX principles for decentralized applications. We'll review real dApps and critique their onboarding flows, wallet integrations, and error states.",
+    description: "A hands-on workshop covering UX principles for decentralized applications. We review real dApps and critique onboarding flows, wallet integrations, and error states.",
     location: "Online (Zoom)",
     event_date: "2026-06-20",
-    max_attendees: 100,
-  },
-  {
-    name: "DeFi Founders Dinner — Singapore",
-    description: "Invite-only dinner for DeFi founders and investors in Singapore. Hosted by the Asia Web3 Alliance. Attendance verified on-chain via Presnce.",
-    location: "Singapore",
-    event_date: "2026-07-01",
-    max_attendees: 30,
+    event_time: "20:00",
+    max_attendees: "100",
   },
 ];
 
-type TxState = { status: "idle"|"pending"|"success"|"error"; hash?: string; message?: string; };
-
-async function findNewlyCreatedEvent(
-  address: string,
-  knownIds: Set<number>,
-  timeoutMs = 30_000
-): Promise<EventRecord | null> {
+async function findNewEvent(address: string, knownIds: Set<number>, timeoutMs = 45_000): Promise<EventRecord | null> {
   const client = getReadClient();
   const start  = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
       const ids = await client.readContract({
-        address:      CONTRACT_ADDRESS as `0x${string}`,
+        address: CONTRACT_ADDRESS as `0x${string}`,
         functionName: "get_organizer_events",
-        args:         [address] as any,
+        args: [address] as any,
       }) as Array<number | bigint | string>;
-
       const newIds = (ids || []).map(Number).filter(id => !knownIds.has(id));
       if (newIds.length > 0) {
         const newest = Math.max(...newIds);
         const ev = await client.readContract({
-          address:      CONTRACT_ADDRESS as `0x${string}`,
+          address: CONTRACT_ADDRESS as `0x${string}`,
           functionName: "get_event",
-          args:         [newest] as any,
+          args: [newest] as any,
         }) as any;
         if (ev && ev.event_id !== undefined) return ev as EventRecord;
       }
@@ -69,30 +61,73 @@ async function findNewlyCreatedEvent(
 export default function CreateEventPage() {
   const { address, isConnected, connect, writeContract } = useWallet();
   const [form, setForm] = useState({
-    name: "", description: "", location: "", event_date: "", max_attendees: "50",
+    name: "", description: "", location: "",
+    event_date: "", event_time: "", max_attendees: "50",
   });
-  const [tx, setTx]             = useState<TxState>({ status: "idle" });
-  const [created, setCreated]   = useState<EventRecord | null>(null);
+  const [imageUrl,  setImageUrl]  = useState("");
+  const [imagePreview, setImagePreview] = useState("");
+  const [upload,    setUpload]    = useState<UploadState>({ status: "idle" });
+  const [tx,        setTx]        = useState<TxState>({ status: "idle" });
+  const [created,   setCreated]   = useState<EventRecord | null>(null);
   const [resolving, setResolving] = useState(false);
-  const [exampleIdx, setExI]    = useState(0);
+  const [exIdx,     setExIdx]     = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-  const valid = form.name.trim().length >= 3 &&
-    form.description.trim().length >= 20 &&
-    form.location.trim().length >= 2 &&
-    form.event_date.trim().length >= 8 &&
-    Number(form.max_attendees) > 0;
+  const valid = form.name.trim().length >= 3
+    && form.description.trim().length >= 20
+    && form.location.trim().length >= 2
+    && form.event_date.trim().length >= 8
+    && Number(form.max_attendees) > 0;
 
   function fillExample() {
-    const ex = EXAMPLES[exampleIdx % EXAMPLES.length];
-    setForm({ name: ex.name, description: ex.description, location: ex.location, event_date: ex.event_date, max_attendees: String(ex.max_attendees) });
-    setExI(i => i + 1);
+    const ex = EXAMPLES[exIdx % EXAMPLES.length];
+    setForm({ name: ex.name, description: ex.description, location: ex.location,
+      event_date: ex.event_date, event_time: ex.event_time, max_attendees: ex.max_attendees });
+    setExIdx(i => i + 1);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagePreview(URL.createObjectURL(file));
+    setUpload({ status: "uploading", message: "Uploading to IPFS..." });
+    try {
+      if (!PINATA_JWT) {
+        setImageUrl(URL.createObjectURL(file));
+        setUpload({ status: "done", message: "Local preview — add PINATA_JWT for IPFS" });
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("name", file.name);
+      fd.append("network", "public");
+      const res = await fetch("https://uploads.pinata.cloud/v3/files", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${PINATA_JWT}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error(`Pinata ${res.status}`);
+      const data = await res.json();
+      const cid  = data?.data?.cid;
+      if (!cid) throw new Error("No CID");
+      const url = `https://ipfs.io/ipfs/${cid}`;
+      setImageUrl(url);
+      setUpload({ status: "done", message: "Uploaded to IPFS ✓" });
+    } catch (err: any) {
+      setUpload({ status: "error", message: err?.message || "Upload failed" });
+    }
+  }
+
+  function removeImage() {
+    setImageUrl(""); setImagePreview(""); setUpload({ status: "idle" });
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function resetForm() {
-    setForm({ name: "", description: "", location: "", event_date: "", max_attendees: "50" });
-    setTx({ status: "idle" });
-    setCreated(null);
+    setForm({ name: "", description: "", location: "", event_date: "", event_time: "", max_attendees: "50" });
+    setImageUrl(""); setImagePreview(""); setUpload({ status: "idle" });
+    setTx({ status: "idle" }); setCreated(null);
   }
 
   async function submit(e: React.FormEvent) {
@@ -104,9 +139,9 @@ export default function CreateEventPage() {
     try {
       const client = getReadClient();
       const ids = await client.readContract({
-        address:      CONTRACT_ADDRESS as `0x${string}`,
+        address: CONTRACT_ADDRESS as `0x${string}`,
         functionName: "get_organizer_events",
-        args:         [address] as any,
+        args: [address] as any,
       }) as Array<number | bigint | string>;
       knownIds = new Set((ids || []).map(Number));
     } catch {}
@@ -115,107 +150,98 @@ export default function CreateEventPage() {
     try {
       const { txHash, timedOut } = await writeContract(
         "create_event",
-        [form.name, form.description, form.location, form.event_date, Number(form.max_attendees)],
+        [form.name, form.description, form.location, form.event_date, form.event_time, imageUrl, Number(form.max_attendees)],
         toWei(CREATE_FEE)
       );
-      setTx({
-        status: timedOut ? "pending" : "success",
-        hash: txHash,
-        message: timedOut ? "Submitted. Confirming..." : "Event created! Resolving event ID...",
-      });
+      setTx({ status: timedOut ? "pending" : "success", hash: txHash, message: "Event created! Resolving ID..." });
       setResolving(true);
-      const ev = await findNewlyCreatedEvent(address, knownIds);
+      const ev = await findNewEvent(address, knownIds);
       setResolving(false);
-      if (ev) {
-        setCreated(ev);
-        setTx(p => ({ ...p, status: "success", message: "Event created on-chain!" }));
-      } else {
-        setTx(p => ({ ...p, status: "success", message: "Submitted. Check My Events in a moment." }));
-      }
+      if (ev) { setCreated(ev); setTx(p => ({ ...p, status: "success", message: "Event live on-chain!" })); }
+      else     { setTx(p => ({ ...p, status: "success", message: "Submitted! Check Dashboard." })); }
     } catch (err: any) {
       setResolving(false);
       setTx({ status: "error", message: err?.message || "Transaction failed" });
     }
   }
 
-  // Success card
+  // ── Success card ────────────────────────────────────────────
   if (created) {
     return (
-      <div className="min-h-dvh flex flex-col">
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <main className="flex-1 px-4 sm:px-6 py-10 max-w-2xl mx-auto w-full">
+        <main style={{ flex: 1, maxWidth: 680, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
           <div className="animate-fade-up">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-sage-light animate-pulse" />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--verify-green)" }} />
               <p className="section-label">Event created on-chain</p>
             </div>
-            <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink-50 mb-2">
+            <h1 style={{ fontSize: "clamp(24px,4vw,36px)", fontWeight: 800, letterSpacing: "-.03em", marginBottom: 6 }}>
               Your event is live.
             </h1>
-            <p className="text-sm text-ink-300 mb-8">
-              Share the link so attendees can claim their attendance.
+            <p style={{ fontSize: 14, color: "var(--ink-3)", marginBottom: 28 }}>
+              Share the event ID with attendees so they can claim attendance.
             </p>
 
-            <div className="relative border border-violet/30 bg-gradient-to-br from-ink-800 to-ink-900 rounded-sm p-6 sm:p-8 mb-6 overflow-hidden">
-              <div className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-10 pointer-events-none"
-                style={{ background: "radial-gradient(circle, #7C5CBF 0%, transparent 70%)" }} />
+            <div className="card" style={{ padding: "clamp(20px,4vw,32px)", marginBottom: 16, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "linear-gradient(90deg, var(--teal), #6366F1)" }} />
 
-              <div className="flex items-start justify-between mb-6 gap-4">
-                <div>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-violet/60 mb-1">Event ID</p>
-                  <p className="font-display text-5xl sm:text-6xl font-bold text-violet-light leading-none">
-                    #{String(created.event_id).padStart(4, "0")}
-                  </p>
+              {/* Cover image */}
+              {(created.image_url || imagePreview) && (
+                <div style={{ margin: "-32px -32px 20px", overflow: "hidden", background: "#000" }}>
+                  <img src={created.image_url || imagePreview} alt={created.name}
+                    style={{ width: "100%", height: "auto", display: "block", maxHeight: 300 }} />
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-ink-500 mb-1">Max Attendees</p>
-                  <p className="font-display text-5xl sm:text-6xl font-bold text-ink-100 leading-none">
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Event ID</div>
+                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(40px,8vw,64px)", fontWeight: 700, color: "var(--teal)", letterSpacing: "-.02em", lineHeight: 1 }}>
+                    #{String(created.event_id).padStart(4,"0")}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>Capacity</div>
+                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(40px,8vw,64px)", fontWeight: 700, color: "var(--ink-2)", letterSpacing: "-.02em", lineHeight: 1 }}>
                     {created.max_attendees}
-                  </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="divider mb-5" />
+              <div className="divider" style={{ marginBottom: 16 }} />
 
-              <h3 className="font-display text-lg font-semibold text-ink-100 mb-1">{created.name}</h3>
-              <p className="text-xs text-ink-300 line-clamp-2 mb-5 leading-relaxed">{created.description}</p>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, overflowWrap: "anywhere" }}>{created.name}</h3>
+              <p style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.6, overflowWrap: "anywhere" }}>{created.description}</p>
 
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <p className="text-ink-500 mb-1">Location</p>
-                  <p className="text-ink-200">{created.location}</p>
-                </div>
-                <div>
-                  <p className="text-ink-500 mb-1">Date</p>
-                  <p className="font-mono text-ink-200">{created.event_date}</p>
-                </div>
-                <div>
-                  <p className="text-ink-500 mb-1">Status</p>
-                  <p className="font-mono text-sage-light">active</p>
-                </div>
-                <div>
-                  <p className="text-ink-500 mb-1">Verified</p>
-                  <p className="font-mono text-ink-400">not yet</p>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "Date",     value: created.event_date },
+                  { label: "Time",     value: (created as any).event_time || "—" },
+                  { label: "Location", value: created.location },
+                  { label: "Status",   value: "active" },
+                ].map(r => (
+                  <div key={r.label} style={{ background: "var(--ink-8)", borderRadius: 8, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 600, marginBottom: 3 }}>{r.label}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: "var(--ink-2)", fontWeight: 500, overflowWrap: "anywhere" }}>{r.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {tx.hash && (
-              <a href={`https://explorer-studio.genlayer.com/tx/${tx.hash}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 mb-6 p-3 border border-ink-700 rounded-sm hover:border-violet/40 transition-colors group">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-ink-500 mb-0.5">Transaction</p>
-                  <p className="font-mono text-xs text-ink-200 truncate">{tx.hash}</p>
+              <a href={`https://explorer-studio.genlayer.com/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16, padding: "12px 16px", borderRadius: 10, border: "1px solid var(--ink-6)", textDecoration: "none" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-4)", marginBottom: 2, letterSpacing: ".06em", textTransform: "uppercase" }}>Transaction</div>
+                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.hash}</div>
                 </div>
-                <svg className="w-4 h-4 text-ink-400 group-hover:text-violet-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
+                <span style={{ fontSize: 16, color: "var(--ink-4)", flexShrink: 0 }}>↗</span>
               </a>
             )}
 
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Link href="/my-events" className="btn-primary text-center">View in My Events</Link>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Link href="/dashboard" className="btn-primary" style={{ textAlign: "center" }}>View in Dashboard</Link>
               <button onClick={resetForm} className="btn-secondary">Create another</button>
             </div>
           </div>
@@ -226,93 +252,187 @@ export default function CreateEventPage() {
 
   const pending = tx.status === "pending" || resolving;
 
+  // ── Form ────────────────────────────────────────────────────
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <Navbar />
-      <main className="flex-1 px-4 sm:px-6 py-10 max-w-2xl mx-auto w-full">
-        <div className="mb-8 animate-fade-up">
-          <p className="section-label mb-3">Host an event</p>
-          <div className="flex items-start justify-between gap-4">
+      <main style={{ flex: 1, maxWidth: 680, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
+
+        <div style={{ marginBottom: 28 }}>
+          <p className="section-label" style={{ marginBottom: 8 }}>Host an event</p>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div>
-              <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink-50 mb-2">Create event</h1>
-              <p className="text-sm text-ink-300">On-chain. AI-verified attendance. Fee: <span className="font-mono text-violet-light">{CREATE_FEE} GEN</span></p>
+              <h1 style={{ fontSize: "clamp(24px,4vw,36px)", fontWeight: 800, letterSpacing: "-.03em", marginBottom: 6 }}>Create event</h1>
+              <p style={{ fontSize: 14, color: "var(--ink-3)" }}>
+                Fee: <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--teal)", fontWeight: 600 }}>{CREATE_FEE} GEN</span>
+              </p>
             </div>
-            <button type="button" onClick={fillExample}
-              className="shrink-0 flex items-center gap-1.5 border border-violet/40 text-violet-light hover:bg-violet/10 px-3 py-2 rounded-sm text-xs font-mono transition-colors mt-1">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Fill example
+            <button type="button" onClick={fillExample} style={{
+              display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+              fontSize: 12, fontWeight: 600, color: "var(--teal)",
+              background: "var(--teal-bg)", border: "1px solid var(--teal-border)",
+              borderRadius: 8, padding: "7px 14px", cursor: "pointer",
+            }}>
+              ⚡ Fill example
             </button>
           </div>
         </div>
 
+        {/* Pending state */}
         {pending && (
-          <div className="mb-6 border border-violet/30 bg-violet/5 rounded-sm p-5 animate-fade-up">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 rounded-full bg-violet-light animate-pulse" />
-              <p className="text-sm font-medium text-violet-light">
+          <div style={{ marginBottom: 20, background: "var(--teal-bg)", border: "1.5px solid var(--teal-border)", borderRadius: 12, padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--teal)", flexShrink: 0 }} />
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--teal)" }}>
                 {resolving ? "Resolving event ID..." : "Creating event on-chain..."}
               </p>
             </div>
-            <p className="text-xs text-ink-400">This usually takes a few seconds.</p>
+            <p style={{ fontSize: 12, color: "var(--ink-3)" }}>Usually takes 30–60 seconds.</p>
           </div>
         )}
 
-        <form onSubmit={submit} className={`space-y-5 animate-fade-up delay-100 ${pending ? "opacity-50 pointer-events-none" : ""}`}>
+        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 22, opacity: pending ? .5 : 1, pointerEvents: pending ? "none" : "auto" }}>
+
+          {/* Cover image */}
           <div>
-            <label className="block text-xs font-mono text-ink-400 mb-2 uppercase tracking-wider">Event name *</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+              Cover image <span style={{ fontWeight: 400, color: "var(--ink-4)", textTransform: "none" }}>(optional)</span>
+            </label>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} />
+
+            {imagePreview ? (
+              <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", border: "1px solid var(--ink-6)" }}>
+                <img src={imagePreview} alt="cover preview"
+                  style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }} />
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: 0, transition: "opacity .2s" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = "1"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = "0"}>
+                  <button type="button" onClick={() => fileRef.current?.click()} style={{
+                    background: "#fff", color: "#111", fontSize: 12, fontWeight: 600, padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                  }}>Change</button>
+                  <button type="button" onClick={removeImage} style={{
+                    background: "rgba(239,68,68,.9)", color: "#fff", fontSize: 12, fontWeight: 600, padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                  }}>Remove</button>
+                </div>
+                {upload.status === "done" && (
+                  <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(16,185,129,.9)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20 }}>
+                    IPFS ✓
+                  </div>
+                )}
+                {upload.status === "uploading" && (
+                  <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(0,0,0,.6)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20 }}>
+                    Uploading...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div onClick={() => fileRef.current?.click()} style={{
+                border: "2px dashed var(--ink-5)", borderRadius: 12, padding: "28px 24px",
+                cursor: "pointer", textAlign: "center", transition: "border-color .15s, background .15s",
+                background: "var(--ink-8)",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLElement).style.background = "var(--teal-bg)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--ink-5)"; (e.currentTarget as HTMLElement).style.background = "var(--ink-8)"; }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 4 }}>Click to upload cover image</p>
+                <p style={{ fontSize: 11, color: "var(--ink-4)" }}>PNG, JPG, WEBP — uploaded permanently to IPFS</p>
+              </div>
+            )}
+          </div>
+
+          {/* Name */}
+          <div>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+              Event name *
+            </label>
             <input type="text" className="input-field" placeholder="GenLayer Builder Meetup"
               value={form.name} onChange={e => set("name", e.target.value)} minLength={3} required />
           </div>
 
+          {/* Description */}
           <div>
-            <label className="block text-xs font-mono text-ink-400 mb-2 uppercase tracking-wider">
-              Description * <span className="normal-case text-ink-500">(min 20 chars)</span>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+              Description * <span style={{ fontWeight: 400, color: "var(--ink-4)", textTransform: "none" }}>(min 20 chars)</span>
             </label>
-            <textarea className="input-field min-h-[100px]"
+            <textarea className="input-field" rows={4}
               placeholder="What is this event about? Who should attend? What will happen?"
               value={form.description} onChange={e => set("description", e.target.value)} minLength={20} required />
-            <p className="mt-1 text-xs text-ink-500 text-right">{form.description.length} chars</p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-mono text-ink-400 mb-2 uppercase tracking-wider">Location *</label>
-              <input type="text" className="input-field" placeholder="Jakarta, Indonesia"
-                value={form.location} onChange={e => set("location", e.target.value)} required />
-            </div>
-            <div>
-              <label className="block text-xs font-mono text-ink-400 mb-2 uppercase tracking-wider">Event date *</label>
-              <input type="date" className="input-field"
-                value={form.event_date} onChange={e => set("event_date", e.target.value)} required />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+              <span style={{ fontSize: 11, color: form.description.length >= 20 ? "var(--verify-green)" : "var(--ink-4)" }}>
+                {form.description.length} chars
+              </span>
             </div>
           </div>
 
+          {/* Location */}
           <div>
-            <label className="block text-xs font-mono text-ink-400 mb-2 uppercase tracking-wider">Max attendees *</label>
-            <input type="number" min="1" max="10000" className="input-field"
-              value={form.max_attendees} onChange={e => set("max_attendees", e.target.value)} required />
-            <p className="mt-1 text-xs text-ink-500">Attendance claims are capped at this number.</p>
-          </div>
-
-          <div className="card p-4 flex items-start gap-3">
-            <div className="w-1 h-1 rounded-full bg-violet mt-2 shrink-0 animate-pulse" />
-            <p className="text-xs text-ink-300 leading-relaxed">
-              Fee: <span className="font-mono text-violet-light">{CREATE_FEE} GEN</span>. After creation,
-              attendees can claim with proof URLs. AI validators verify each claim.
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+              Location *
+            </label>
+            <input type="text" className="input-field"
+              placeholder="Jakarta, Indonesia or Online (Zoom)"
+              value={form.location} onChange={e => set("location", e.target.value)} required />
+            <p style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>
+              Google Maps will show this location on the event page.
             </p>
           </div>
 
-          <button type="submit" className="btn-primary w-full py-3.5 text-base" disabled={pending || !valid}>
+          {/* Date + Time side by side */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+                Date *
+              </label>
+              <input type="date" className="input-field"
+                value={form.event_date} onChange={e => set("event_date", e.target.value)} required />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+                Time <span style={{ fontWeight: 400, color: "var(--ink-4)", textTransform: "none" }}>(optional)</span>
+              </label>
+              <input type="time" className="input-field"
+                value={form.event_time} onChange={e => set("event_time", e.target.value)} />
+            </div>
+          </div>
+
+          {/* Max attendees */}
+          <div>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>
+              Max attendees *
+            </label>
+            <input type="number" min="1" max="10000" className="input-field"
+              value={form.max_attendees} onChange={e => set("max_attendees", e.target.value)} required />
+            <p style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>
+              Attendance claims are capped at this number.
+            </p>
+          </div>
+
+          {/* Info note */}
+          <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--teal)", marginTop: 5, flexShrink: 0 }} />
+            <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.6 }}>
+              Fee: <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--teal)", fontWeight: 600 }}>{CREATE_FEE} GEN</span>.
+              After creation, attendees submit a proof URL and AI validators verify their attendance automatically.
+            </p>
+          </div>
+
+          {/* Submit */}
+          <button type="submit" className="btn-primary" style={{ fontSize: 15, padding: "13px 0", width: "100%" }}
+            disabled={pending || !valid || upload.status === "uploading"}>
             {pending
-              ? <><div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />Processing...</>
-              : !isConnected ? "Connect MetaMask to create"
-              : <>Create event <span className="font-mono opacity-70">{CREATE_FEE} GEN</span></>}
+              ? <><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Processing...</>
+              : !isConnected ? "Connect wallet to create"
+              : upload.status === "uploading" ? "Uploading image..."
+              : <>Create event · <span style={{ opacity: .75, fontFamily: "'JetBrains Mono',monospace" }}>{CREATE_FEE} GEN</span></>
+            }
           </button>
 
           {tx.status !== "idle" && tx.status !== "success" && <TxStatus {...tx} />}
         </form>
+
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
       </main>
     </div>
   );

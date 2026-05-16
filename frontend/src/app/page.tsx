@@ -1,7 +1,8 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
-import { useStats } from "@/hooks/useContract";
+import { useStats, useAllEvents, usePlatformCounts } from "@/hooks/useContract";
 
 const FingerprintLogo = ({ size = 36 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
@@ -18,12 +19,15 @@ const FingerprintLogo = ({ size = 36 }: { size?: number }) => (
 );
 
 function StatsRow() {
-  const { stats } = useStats();
+  const { stats }  = useStats();
+  const { events } = useAllEvents();
+  const platform   = usePlatformCounts();
+  const derivedOrgs = new Set(events.map((e: any) => String(e.organizer).toLowerCase())).size;
+  const n = (v: any) => v !== undefined && v !== null ? Number(v) : 0;
   const items = [
-    { label: "Events hosted",       value: stats?.total_events       ?? 0 },
-    { label: "Attendance claims",   value: stats?.total_attendances  ?? 0 },
-    { label: "Certificates issued", value: stats?.total_certificates ?? 0 },
-    { label: "Organizers",          value: stats?.total_organizers   ?? 0 },
+    { label: "Events hosted",       value: Math.max(n(stats?.total_events),       events.length)           },
+    { label: "Attendance claims",   value: Math.max(n(stats?.total_attendances),  platform.attendances)    },
+    { label: "Certificates issued", value: Math.max(n(stats?.total_certificates), platform.certificates)   },
   ];
   return (
     <div style={{
@@ -37,10 +41,8 @@ function StatsRow() {
       }}>
         {items.map((s, i) => (
           <div key={s.label} style={{
-            padding: "20px 0",
+            padding: "16px clamp(10px,2vw,24px)",
             borderRight: i < 3 ? "1px solid var(--ink-6)" : "none",
-            paddingLeft: i > 0 ? 28 : 0,
-            paddingRight: i < 3 ? 28 : 0,
           }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.03em", lineHeight: 1 }}>
               {s.value}
@@ -61,7 +63,7 @@ export default function HomePage() {
 
         {/* Hero */}
         <section style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(40px, 6vw, 72px) 24px clamp(40px, 5vw, 64px)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 48, alignItems: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: "clamp(28px,4vw,56px)", alignItems: "start" }}>
 
             {/* Left */}
             <div>
@@ -89,7 +91,7 @@ export default function HomePage() {
                 maxWidth: 440, marginBottom: 32,
               }}>
                 AI validators fetch your proof from the internet and issue
-                a tamper-proof attendance certificate on GenLayer, no QR
+                a tamper-proof attendance certificate on GenLayer no QR
                 codes, no check-in apps, no centralized databases.
               </p>
 
@@ -110,17 +112,12 @@ export default function HomePage() {
             <div className="animate-fade-in delay-200" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
               {/* Verdict card */}
-              <div className="card" style={{ padding: "22px 24px", position: "relative" }}>
-                <div style={{
-                  position: "absolute", top: 10, right: 12,
-                  fontSize: 10, fontWeight: 600, letterSpacing: ".06em",
-                  textTransform: "uppercase", color: "var(--ink-4)",
-                  background: "var(--ink-7)", borderRadius: 20, padding: "2px 8px",
-                }}>example</div>
+              <div className="card" style={{ padding: "22px 24px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 5 }}>
-                      AI Verdict
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)" }}>AI Verdict</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-4)", background: "var(--ink-7)", borderRadius: 20, padding: "1px 7px" }}>example</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#10B981" }} />
@@ -128,6 +125,9 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 5 }}>
+                      Confidence
+                    </div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: "var(--teal)", letterSpacing: "-.02em" }}>94%</div>
                   </div>
                 </div>
@@ -161,20 +161,19 @@ export default function HomePage() {
               {/* Certificate card */}
               <div className="card" style={{ padding: "22px 24px", position: "relative", overflow: "hidden" }}>
                 <div style={{
-                  position: "absolute", top: 14, right: 12,
-                  fontSize: 10, fontWeight: 600, letterSpacing: ".06em",
-                  textTransform: "uppercase", color: "var(--ink-4)",
-                  background: "var(--ink-7)", borderRadius: 20, padding: "2px 8px",
-                  zIndex: 1,
-                }}>example</div>
-                <div style={{
                   position: "absolute", top: 0, left: 0, right: 0, height: 3,
                   background: "linear-gradient(90deg, var(--teal), var(--indigo-DEFAULT, #6366F1))",
                 }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)" }}>
-                    Certificate
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)" }}>
+                      Certificate
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-4)", background: "var(--ink-7)", borderRadius: 20, padding: "1px 7px" }}>
+                      example
+                    </span>
+                  </div>
+                  <span className="badge badge-onchain">on-chain</span>
                 </div>
                 <div style={{
                   fontFamily: "'JetBrains Mono',monospace",
@@ -189,7 +188,7 @@ export default function HomePage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {[
                     { label: "Date",     value: "Jun 15, 2026", highlight: false },
-                    { label: "Location", value: "Jakarta, ID",  highlight: false },
+                    { label: "Location", value: "Bandung, ID",  highlight: false },
                     { label: "AI Score", value: "94%",          highlight: true  },
                     { label: "Status",   value: "active",       highlight: true  },
                   ].map(r => (
@@ -219,15 +218,33 @@ export default function HomePage() {
         <section style={{ maxWidth: 1100, margin: "0 auto", padding: "72px 24px" }}>
           <div style={{ marginBottom: 48 }}>
             <div className="section-label" style={{ marginBottom: 10 }}>How it works</div>
-            <h2 style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-.03em", color: "var(--ink)", maxWidth: 400 }}>
-              Three steps. Fully on-chain.
+            <h2 style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-.03em", color: "var(--ink)", maxWidth: 500 }}>
+              Host. Attend. Get certified.
             </h2>
+            <p style={{ fontSize: 15, color: "var(--ink-3)", marginTop: 12, maxWidth: 520, lineHeight: 1.7 }}>
+              No QR codes. No check-in apps. Submit proof of where you were — AI does the rest.
+            </p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
             {[
-              { num: "01", title: "Host an event", body: "Pay 0.01 GEN. Set name, location, date, capacity. Get an event_id on-chain instantly. Apply for Verified badge via AI.", accent: "#0D9488" },
-              { num: "02", title: "Submit your proof", body: "Upload a photo to IPFS or paste any public URL — tweet, RSVP, ticket. The Intelligent Contract fetches it directly.", accent: "#6366F1" },
-              { num: "03", title: "Get certified", body: "5 AI validators independently judge your proof. Valid verdict? Mint a permanent on-chain attendance certificate.", accent: "#10B981" },
+              {
+                num: "01", accent: "#0D9488",
+                title: "Organizer creates event",
+                body: "Create your event on Presnce with name, location, and date. Share the event ID with attendees so they can claim after.",
+                example: "e.g. Claim at presnce.xyz/claim — Event ID: #0001",
+              },
+              {
+                num: "02", accent: "#6366F1",
+                title: "Attendee submits proof",
+                body: "After attending, submit any public proof — a tweet mentioning the event, a photo from the venue, or your RSVP link.",
+                example: "e.g. Tweet: \"Just attended GenLayer Meetup Bandung!\"",
+              },
+              {
+                num: "03", accent: "#10B981",
+                title: "AI verifies, you get certified",
+                body: "AI checks your proof against the event details. If it matches, mint your permanent on-chain certificate.",
+                example: "e.g. Certificate #0042 — verified, 94% confidence",
+              },
             ].map((step, i) => (
               <div key={step.num} className="card animate-fade-up" style={{
                 padding: 28, borderTop: `3px solid ${step.accent}`,
@@ -239,7 +256,16 @@ export default function HomePage() {
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", letterSpacing: "-.01em", marginBottom: 10 }}>
                   {step.title}
                 </h3>
-                <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.7 }}>{step.body}</p>
+                <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.7, marginBottom: 14 }}>{step.body}</p>
+                {"example" in step && (
+                  <div style={{
+                    fontSize: 11, fontStyle: "italic", padding: "8px 11px",
+                    borderRadius: 8, lineHeight: 1.5, color: step.accent,
+                    background: step.accent === "#0D9488" ? "rgba(13,148,136,.06)" : step.accent === "#6366F1" ? "rgba(99,102,241,.06)" : "rgba(16,185,129,.06)",
+                  }}>
+                    {(step as any).example}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -271,7 +297,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  { name: "POAP",       desc: "Honor system — anyone can claim without proof", ok: false },
+                  { name: "POAP",       desc: "Honor system, anyone can claim without proof", ok: false },
                   { name: "EventBrite", desc: "Centralized, single point of failure",           ok: false },
                   { name: "Presnce",    desc: "AI-verified, on-chain, tamper-proof certificates", ok: true },
                 ].map(r => (

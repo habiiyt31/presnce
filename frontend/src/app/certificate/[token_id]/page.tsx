@@ -3,14 +3,22 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { getReadClient, CONTRACT_ADDRESS } from "@/lib/genlayer";
-import { shortAddr, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { useDisplayName } from "@/hooks/useNickname";
 import type { AttendanceCertificate } from "@/types";
+
+function OwnerName({ address }: { address: string }) {
+  const name = useDisplayName(address);
+  return <>{name || `${address.slice(0,6)}...${address.slice(-4)}`}</>;
+}
 
 export default function CertificatePage({ params }: { params: { token_id: string } }) {
   const { token_id } = params;
   const [cert, setCert]     = useState<AttendanceCertificate | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied]   = useState(false);
+  const [copied,  setCopied]  = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     async function fetch() {
@@ -35,17 +43,38 @@ export default function CertificatePage({ params }: { params: { token_id: string
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function shareToX() {
+    if (!cert) return;
+    setSharing(true);
+    try {
+      const { downloadCertImage, buildXShareUrl } = await import("@/lib/certCanvas");
+      window.open(buildXShareUrl(cert), "_blank", "noopener,noreferrer");
+      await downloadCertImage(cert);
+    } catch (e) { console.error(e); }
+    finally { setSharing(false); }
+  }
+
+  async function downloadPNG() {
+    if (!cert) return;
+    setDownloading(true);
+    try {
+      const { downloadCertImage } = await import("@/lib/certCanvas");
+      await downloadCertImage(cert);
+    } catch (e) { console.error(e); }
+    finally { setDownloading(false); }
+  }
+
   const confidenceColor =
-    cert && cert.confidence >= 80 ? "text-sage-light" :
-    cert && cert.confidence >= 60 ? "text-violet-light" : "text-amber";
+    cert && cert.confidence >= 80 ? "var(--verify-green)" :
+    cert && cert.confidence >= 60 ? "var(--teal)"         : "var(--verify-amber)";
 
   if (loading) {
     return (
-      <div className="min-h-dvh flex flex-col">
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <main className="flex-1 px-4 sm:px-6 py-10 max-w-2xl mx-auto w-full space-y-4">
-          <div className="skeleton h-4 w-24" />
-          <div className="skeleton h-64 w-full" />
+        <main style={{ flex: 1, maxWidth: 680, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
+          <div className="skeleton" style={{ height: 16, width: 140, marginBottom: 24 }} />
+          <div className="skeleton" style={{ height: 400 }} />
         </main>
       </div>
     );
@@ -53,14 +82,15 @@ export default function CertificatePage({ params }: { params: { token_id: string
 
   if (!cert) {
     return (
-      <div className="min-h-dvh flex flex-col">
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center">
-            <p className="font-mono text-4xl text-ink-600 mb-4">#{token_id.padStart(4,"0")}</p>
-            <h2 className="font-display text-xl text-ink-100 mb-2">Certificate not found</h2>
-            <p className="text-sm text-ink-400 mb-6">This certificate ID doesn't exist.</p>
-            <Link href="/events" className="btn-secondary">Browse events</Link>
+        <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 48, color: "var(--ink-6)", marginBottom: 16 }}>
+              #{String(token_id).padStart(4,"0")}
+            </p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Certificate not found</h2>
+            <Link href="/my-events" className="btn-secondary" style={{ fontSize: 13 }}>My Events</Link>
           </div>
         </main>
       </div>
@@ -68,108 +98,110 @@ export default function CertificatePage({ params }: { params: { token_id: string
   }
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <Navbar />
-      <main className="flex-1 px-4 sm:px-6 py-10 max-w-2xl mx-auto w-full">
+      <main style={{ flex: 1, maxWidth: 680, margin: "0 auto", width: "100%", padding: "clamp(28px,4vw,48px) clamp(16px,4vw,24px)" }}>
 
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-mono text-ink-500 mb-8 animate-fade-up">
-          <Link href="/my-events" className="hover:text-violet-light transition-colors">My Events</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "var(--ink-4)", marginBottom: 28 }}>
+          <Link href="/dashboard" style={{ color: "var(--teal)", textDecoration: "none" }}>Dashboard</Link>
           <span>/</span>
-          <span className="text-ink-300">Certificate #{String(cert.token_id).padStart(4,"0")}</span>
+          <span>Certificate #{String(cert.token_id).padStart(4,"0")}</span>
         </div>
 
-        <div className="animate-fade-up">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-violet-light animate-pulse" />
-            <p className="section-label">On-chain attendance certificate</p>
-          </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink-50 mb-8">
-            Proof of presence.
-          </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--verify-green)" }} />
+          <p className="section-label">On-chain attendance certificate</p>
+        </div>
+        <h1 style={{ fontSize: "clamp(24px,4vw,32px)", fontWeight: 800, letterSpacing: "-.03em", marginBottom: 28 }}>
+          Proof of presence.
+        </h1>
 
-          {/* Certificate card */}
-          <div className="relative border border-violet/30 bg-gradient-to-br from-ink-800 to-ink-900 rounded-sm p-6 sm:p-10 mb-6 overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10 pointer-events-none"
-              style={{ background: "radial-gradient(circle, #7C5CBF 0%, transparent 70%)" }} />
-            <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full opacity-5 pointer-events-none"
-              style={{ background: "radial-gradient(circle, #A080E0 0%, transparent 70%)" }} />
+        {/* Certificate card */}
+        <div className="card" style={{ padding: "clamp(24px,4vw,40px)", marginBottom: 16, position: "relative", overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: 4,
+            background: "linear-gradient(90deg, var(--teal), #6366F1)",
+          }} />
 
-            {/* Token ID + Confidence */}
-            <div className="flex items-start justify-between mb-8 gap-4 relative">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-wider text-violet/60 mb-1">Certificate</p>
-                <p className="font-display text-5xl sm:text-6xl font-bold text-violet-light leading-none">
-                  #{String(cert.token_id).padStart(4,"0")}
-                </p>
+          {/* Token + Confidence */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>
+                Certificate
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-mono uppercase tracking-wider text-ink-500 mb-1">AI Confidence</p>
-                <p className={`font-display text-5xl sm:text-6xl font-bold leading-none ${confidenceColor}`}>
-                  {cert.confidence}%
-                </p>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(40px,8vw,64px)", fontWeight: 700, color: "#6366F1", letterSpacing: "-.02em", lineHeight: 1 }}>
+                #{String(cert.token_id).padStart(4,"0")}
               </div>
             </div>
-
-            {/* Confidence bar */}
-            <div className="mb-8 relative">
-              <div className="h-1.5 bg-ink-700 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-violet to-violet-light transition-all duration-1000"
-                  style={{ width: `${cert.confidence}%` }} />
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>
+                AI Confidence
               </div>
-              <div className="flex justify-between text-[9px] font-mono text-ink-600 mt-1">
-                <span>uncertain</span>
-                <span>likely</span>
-                <span>verified</span>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: "clamp(40px,8vw,64px)", fontWeight: 700, color: confidenceColor, letterSpacing: "-.02em", lineHeight: 1 }}>
+                {cert.confidence}%
               </div>
-            </div>
-
-            <div className="divider mb-6 relative" />
-
-            {/* Event info */}
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-50 mb-6 leading-snug relative">
-              {cert.event_name}
-            </h2>
-
-            <div className="grid grid-cols-2 gap-5 text-xs relative">
-              <div>
-                <p className="text-ink-500 mb-1">Date</p>
-                <p className="font-mono text-ink-200">{formatDate(cert.event_date)}</p>
-              </div>
-              <div>
-                <p className="text-ink-500 mb-1">Location</p>
-                <p className="text-ink-200">{cert.event_location}</p>
-              </div>
-              <div>
-                <p className="text-ink-500 mb-1">Owner</p>
-                <p className="font-mono text-ink-200">{shortAddr(cert.owner)}</p>
-              </div>
-              <div>
-                <p className="text-ink-500 mb-1">Event ID</p>
-                <p className="font-mono text-ink-200">#{String(cert.event_id).padStart(4,"0")}</p>
-              </div>
-            </div>
-
-            {/* Presnce watermark */}
-            <div className="mt-8 pt-5 border-t border-ink-700/50 flex items-center justify-between relative">
-              <p className="font-display text-xs italic text-ink-600">Presnce</p>
-              <p className="font-mono text-[10px] text-ink-600">Built on GenLayer Studionet</p>
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="grid sm:grid-cols-3 gap-3">
-            <button onClick={copyLink} className="btn-secondary text-sm py-3">
-              {copied ? "✓ Copied!" : "Copy link"}
-            </button>
-            <Link href={`/event/${cert.event_id}`} className="btn-secondary text-center text-sm py-3">
-              View event
-            </Link>
-            <Link href="/my-events" className="btn-primary text-center text-sm py-3">
-              My certificates
-            </Link>
+          {/* Confidence bar */}
+          <div className="conf-track" style={{ marginBottom: 4 }}>
+            <div className="conf-fill" style={{ width: `${cert.confidence}%` }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-4)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 24 }}>
+            <span>uncertain</span><span>likely</span><span>verified</span>
+          </div>
+
+          <div className="divider" style={{ marginBottom: 20 }} />
+
+          {/* Event name */}
+          <h2 style={{ fontSize: "clamp(16px,3vw,22px)", fontWeight: 700, letterSpacing: "-.02em", marginBottom: 20, overflowWrap: "anywhere" }}>
+            {cert.event_name}
+          </h2>
+
+          {/* Details grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {[
+              { label: "Date",     value: formatDate(cert.event_date), teal: false },
+              { label: "Location", value: cert.event_location,         teal: false },
+              { label: "Owner",    value: <OwnerName address={cert.owner} />, teal: false },
+              { label: "Event",    value: `#${String(cert.event_id).padStart(4,"0")}`, teal: true },
+            ].map(r => (
+              <div key={r.label} style={{ background: r.teal ? "var(--teal-bg)" : "var(--ink-8)", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-4)", marginBottom: 4 }}>{r.label}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 600, color: r.teal ? "var(--teal)" : "var(--ink-2)", overflowWrap: "anywhere" }}>
+                  {r.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--ink-6)", display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-4)", fontFamily: "'JetBrains Mono',monospace" }}>
+            <span>Presnce</span>
+            <span>GenLayer Studionet</span>
           </div>
         </div>
+
+        {/* Actions */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+          <button onClick={shareToX} disabled={sharing} className="btn-primary" style={{ fontSize: 13 }}>
+            {sharing ? "Generating..." : "Share to X 🐦"}
+          </button>
+          <button onClick={downloadPNG} disabled={downloading} className="btn-secondary" style={{ fontSize: 13 }}>
+            {downloading ? "Saving..." : "Download PNG"}
+          </button>
+          <button onClick={copyLink} className="btn-secondary" style={{ fontSize: 13 }}>
+            {copied ? "✓ Copied!" : "Copy link"}
+          </button>
+          <Link href={`/event/${cert.event_id}`} className="btn-secondary" style={{ textAlign: "center", fontSize: 13 }}>
+            View event
+          </Link>
+        </div>
+
+        <p style={{ marginTop: 12, fontSize: 11, color: "var(--ink-4)", textAlign: "center" }}>
+          Share to X will open a tweet + auto-download the PNG. Attach the PNG to your tweet!
+        </p>
       </main>
     </div>
   );
