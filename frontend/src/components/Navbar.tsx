@@ -8,10 +8,10 @@ import { ensureNetwork, getEthereum, CHAIN } from "@/lib/genlayer";
 import { useNickname } from "@/hooks/useNickname";
 
 const LINKS = [
-  { href: "/events",         label: "Explore"      },
-  { href: "/create-event",   label: "Host"         },
-  { href: "/claim",          label: "Claim"        },
-  { href: "/dashboard",      label: "Dashboard"    },
+  { href: "/events",       label: "Explore"   },
+  { href: "/create-event", label: "Host"      },
+  { href: "/claim",        label: "Claim"     },
+  { href: "/dashboard",    label: "Dashboard" },
 ];
 
 const FingerprintLogo = ({ size = 28 }: { size?: number }) => (
@@ -45,46 +45,46 @@ function NetworkBanner() {
   if (!currentHex || currentHex.toLowerCase() === expectedHex.toLowerCase()) return null;
 
   return (
-    <button
-      onClick={async () => { setSwitching(true); try { await ensureNetwork(); } finally { setSwitching(false); } }}
+    <button onClick={async () => { setSwitching(true); try { await ensureNetwork(); } finally { setSwitching(false); } }}
       disabled={switching}
-      className="hide-xs"
       style={{
         display: "flex", alignItems: "center", gap: 6,
-        padding: "5px 12px", borderRadius: 20,
+        padding: "4px 10px", borderRadius: 20,
         background: "#FEE2E2", border: "1px solid #FECACA",
         color: "#991B1B", fontSize: 11, fontWeight: 600,
         letterSpacing: ".04em", textTransform: "uppercase", cursor: "pointer",
-      }}
-    >
+      }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#EF4444" }} />
-      {switching ? "Switching..." : "Wrong network"}
+      {switching ? "..." : "Wrong network"}
     </button>
   );
 }
 
-function WalletButton() {
+function WalletButton({ compact = false }: { compact?: boolean }) {
   const { address, isConnected, isConnecting, connect, disconnect } = useWallet();
   const { nickname } = useNickname(address);
   if (!isConnected) {
     return (
-      <button onClick={connect} disabled={isConnecting} className="btn-primary nav-wallet"
-        style={{ padding: "8px 18px", fontSize: 13 }}>
-        {isConnecting ? "Connecting..." : "Connect wallet"}
+      <button onClick={connect} disabled={isConnecting} className="btn-primary"
+        style={{ padding: compact ? "6px 14px" : "8px 18px", fontSize: 13 }}>
+        {isConnecting ? "..." : "Connect"}
       </button>
     );
   }
   return (
-    <button onClick={disconnect} className="nav-wallet" style={{
+    <button onClick={disconnect} style={{
       display: "flex", alignItems: "center", gap: 7,
-      padding: "7px 14px", borderRadius: 10,
+      padding: compact ? "5px 10px" : "7px 14px", borderRadius: 10,
       background: "var(--surface)", border: "1.5px solid var(--ink-6)",
       color: "var(--ink-2)", fontSize: 13, fontWeight: nickname ? 600 : 500,
       fontFamily: nickname ? "inherit" : "'JetBrains Mono',monospace",
-      cursor: "pointer", boxShadow: "var(--shadow-sm)",
+      cursor: "pointer", boxShadow: "var(--shadow-sm)", maxWidth: 160,
+      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
     }}>
-      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--teal)" }} />
-      {nickname || shortAddr(address!)}
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--teal)", flexShrink: 0 }} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+        {nickname || shortAddr(address!)}
+      </span>
     </button>
   );
 }
@@ -93,25 +93,29 @@ export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  // Close menu on route change
+  useEffect(() => { setOpen(false); }, [pathname]);
+
   return (
     <header style={{
       position: "sticky", top: 0, zIndex: 50,
-      background: "rgba(248,249,250,.92)",
+      background: "rgba(248,249,250,.95)",
       backdropFilter: "blur(12px)",
       borderBottom: "1px solid var(--ink-6)",
     }}>
-      <div className="container">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 58 }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 clamp(16px,4vw,24px)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
 
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}>
-            <FingerprintLogo size={28} />
+          {/* Logo */}
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none", flexShrink: 0 }}>
+            <FingerprintLogo size={26} />
             <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.03em", color: "var(--ink)" }}>
               Presnce
             </span>
           </Link>
 
           {/* Desktop nav */}
-          <nav className="nav-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <nav style={{ display: "flex", alignItems: "center", gap: 2 }} className="nav-links">
             {LINKS.map(l => (
               <Link key={l.href} href={l.href} style={{
                 padding: "6px 12px", borderRadius: 8,
@@ -125,40 +129,53 @@ export function Navbar() {
             ))}
           </nav>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <NetworkBanner />
-            <WalletButton />
-            {/* Mobile hamburger */}
-            <button
-              onClick={() => setOpen(!open)}
-              style={{
-                display: "none", padding: 8, background: "none", border: "none",
-                cursor: "pointer", color: "var(--ink-3)",
-              }}
-              className="show-mobile"
-              aria-label="Menu"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                {open
-                  ? <><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>
-                  : <><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>
-                }
-              </svg>
-            </button>
+          {/* Right */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="nav-links" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <NetworkBanner />
+            </div>
+            <div className="nav-links" style={{ display: "flex" }}>
+              <WalletButton />
+            </div>
+
+            {/* Mobile: wallet compact + hamburger */}
+            <div className="show-mobile" style={{ display: "none", alignItems: "center", gap: 8 }}>
+              <WalletButton compact />
+              <button onClick={() => setOpen(!open)} style={{
+                width: 36, height: 36, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 5,
+                background: "none", border: "none", cursor: "pointer", padding: 0,
+              }}>
+                <span style={{
+                  display: "block", width: 20, height: 1.5, background: "var(--ink-2)", borderRadius: 2,
+                  transition: "transform .2s, opacity .2s",
+                  transform: open ? "rotate(45deg) translate(4px, 4px)" : "none",
+                }} />
+                <span style={{
+                  display: "block", width: 20, height: 1.5, background: "var(--ink-2)", borderRadius: 2,
+                  opacity: open ? 0 : 1, transition: "opacity .2s",
+                }} />
+                <span style={{
+                  display: "block", width: 20, height: 1.5, background: "var(--ink-2)", borderRadius: 2,
+                  transition: "transform .2s, opacity .2s",
+                  transform: open ? "rotate(-45deg) translate(4px, -4px)" : "none",
+                }} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu dropdown */}
         {open && (
-          <nav style={{
+          <div style={{
             borderTop: "1px solid var(--ink-6)",
             padding: "12px 0 16px",
-            display: "flex", flexDirection: "column", gap: 4,
-          }}>
+            display: "flex", flexDirection: "column", gap: 2,
+          }} className="show-mobile">
             {LINKS.map(l => (
               <Link key={l.href} href={l.href} onClick={() => setOpen(false)} style={{
-                padding: "9px 12px", borderRadius: 8,
-                fontSize: 14, fontWeight: pathname === l.href ? 600 : 500,
+                padding: "11px 12px", borderRadius: 10,
+                fontSize: 15, fontWeight: pathname === l.href ? 700 : 500,
                 color: pathname === l.href ? "var(--teal)" : "var(--ink-2)",
                 background: pathname === l.href ? "var(--teal-bg)" : "transparent",
                 textDecoration: "none",
@@ -166,7 +183,10 @@ export function Navbar() {
                 {l.label}
               </Link>
             ))}
-          </nav>
+            <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--ink-6)" }}>
+              <NetworkBanner />
+            </div>
+          </div>
         )}
       </div>
     </header>

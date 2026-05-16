@@ -94,7 +94,6 @@ export default function OrganizerPage({ params }: { params: { address: string } 
                 <div>
                   <p className="font-mono text-sm text-ink-100">{shortAddr(address)}</p>
                   {organizer?.is_verified && (
-                    <span className="badge-verified">verified organizer</span>
                   )}
                 </div>
               </div>

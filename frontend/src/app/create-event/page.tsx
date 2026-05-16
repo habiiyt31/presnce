@@ -273,7 +273,7 @@ export default function CreateEventPage() {
               background: "var(--teal-bg)", border: "1px solid var(--teal-border)",
               borderRadius: 8, padding: "7px 14px", cursor: "pointer",
             }}>
-              ⚡ Fill example
+              Fill example
             </button>
           </div>
         </div>

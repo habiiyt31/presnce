@@ -92,7 +92,7 @@ export default function HomePage() {
               }}>
                 AI validators fetch your proof from the internet and issue
                 a tamper-proof attendance certificate on GenLayer no QR
-                codes, no check-in apps, no centralized databases.
+                codes, no check-in apps.
               </p>
 
               <div className="animate-fade-up delay-300" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -103,7 +103,7 @@ export default function HomePage() {
               <p className="animate-fade-up delay-400" style={{ marginTop: 20, fontSize: 13, color: "var(--ink-4)" }}>
                 Already attended?{" "}
                 <Link href="/claim" style={{ color: "var(--teal)", fontWeight: 600 }}>
-                  Claim your attendance →
+                  Claim your attendance 
                 </Link>
               </p>
             </div>
@@ -188,7 +188,7 @@ export default function HomePage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {[
                     { label: "Date",     value: "Jun 15, 2026", highlight: false },
-                    { label: "Location", value: "Bandung, ID",  highlight: false },
+                    { label: "Location", value: "Jakarta, ID",  highlight: false },
                     { label: "AI Score", value: "94%",          highlight: true  },
                     { label: "Status",   value: "active",       highlight: true  },
                   ].map(r => (
@@ -222,7 +222,7 @@ export default function HomePage() {
               Host. Attend. Get certified.
             </h2>
             <p style={{ fontSize: 15, color: "var(--ink-3)", marginTop: 12, maxWidth: 520, lineHeight: 1.7 }}>
-              No QR codes. No check-in apps. Submit proof of where you were — AI does the rest.
+              No QR codes. No check-in apps. Submit proof of where you were AI does the rest.
             </p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
@@ -236,8 +236,8 @@ export default function HomePage() {
               {
                 num: "02", accent: "#6366F1",
                 title: "Attendee submits proof",
-                body: "After attending, submit any public proof — a tweet mentioning the event, a photo from the venue, or your RSVP link.",
-                example: "e.g. Tweet: \"Just attended GenLayer Meetup Bandung!\"",
+                body: "After attending, submit any public proof a tweet mentioning the event, a photo from the venue, or your RSVP link.",
+                example: "e.g. Tweet: \"Just attended GenLayer Meetup Jakarta!\"",
               },
               {
                 num: "03", accent: "#10B981",
@@ -333,7 +333,7 @@ export default function HomePage() {
             <FingerprintLogo size={16} />
             <span style={{ fontWeight: 700, color: "var(--ink-3)", letterSpacing: "-.01em" }}>Presnce</span>
           </div>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Built on GenLayer</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>Built on GenLayer Studionet</span>
         </div>
       </footer>
     </div>

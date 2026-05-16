@@ -99,6 +99,7 @@ class Presnce(gl.Contract):
 
     player_event_count: TreeMap[Address, u256]
     player_cert_count:  TreeMap[Address, u256]
+    nicknames:          TreeMap[Address, str]
 
     event_count:       u256
     attendance_count:  u256
@@ -321,6 +322,23 @@ class Presnce(gl.Contract):
             "event_location": str(ev.location),
             "confidence":     int(att.confidence),
         })
+
+    # ── Write: Set Nickname ───────────────────────────────────
+
+    @gl.public.write
+    def set_nickname(self, name: str) -> str:
+        caller = gl.message.sender_address
+        clean  = name.strip()[:32]
+        assert len(clean) >= 1, "Nickname too short"
+        self.nicknames[caller] = clean
+        return json.dumps({"success": True, "nickname": clean})
+
+    # ── View: Get Nickname ─────────────────────────────────────
+
+    @gl.public.view
+    def get_nickname(self, addr: str) -> str:
+        target = Address(addr)
+        return self.nicknames.get(target, "")
 
     # ── Write: Close Event ─────────────────────────────────────
 

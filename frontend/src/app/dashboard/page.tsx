@@ -20,7 +20,7 @@ const VERDICT_CONFIG = {
 export default function DashboardPage() {
   const { address, isConnected, connect, writeContract } = useWallet();
   const { events,      loading: evLoading,   refetch: refetchEv   } = useMyEvents(address);
-  const { nickname, editing, draft, setDraft, save, startEdit, cancelEdit } = useNickname(address);
+  const { nickname, editing, draft, setDraft, save, startEdit, cancelEdit, saving, saveError } = useNickname(address);
   const { attendances, loading: attLoading,  refetch: refetchAtt  } = useMyAttendances(address);
   const { certs,       loading: certLoading, refetch: refetchCert } = useMyCertificates(address);
   const { stats } = useStats();
@@ -113,7 +113,7 @@ export default function DashboardPage() {
                       outline: "none", color: "var(--ink)", padding: "0 4px", width: "clamp(180px,40vw,320px)",
                     }}
                   />
-                  <button onClick={() => save(draft)} className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }}>Save</button>
+                  <button onClick={() => save(draft)} className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
                   <button onClick={cancelEdit} className="btn-secondary" style={{ padding: "6px 14px", fontSize: 12 }}>Cancel</button>
                 </div>
               ) : (
@@ -128,6 +128,11 @@ export default function DashboardPage() {
                   }}>
                     {nickname ? "Edit" : "Set nickname"}
                   </button>
+                </div>
+              )}
+              {saveError && (
+                <div style={{ fontSize: 11, color: "var(--verify-amber)", marginTop: 4 }}>
+                  ⚠ {saveError}
                 </div>
               )}
               {nickname && (

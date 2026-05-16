@@ -402,3 +402,80 @@
   white-space: nowrap;
   max-width: 100%;
 }
+
+/* ── Mobile responsive fixes ─────────────────────────── */
+@media (max-width: 768px) {
+  /* Navbar */
+  .nav-links { display: none !important; }
+  .show-mobile { display: flex !important; }
+
+  /* Hero split grid → stack */
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Stats row → 2x2 */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .stats-grid > div {
+    border-right: none !important;
+    border-bottom: 1px solid var(--ink-6);
+    padding: 14px 16px !important;
+  }
+
+  /* How it works → 1 col */
+  .how-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* CTA section */
+  .cta-inner {
+    padding: 24px 20px !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Events grid → 1 col */
+  .events-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Dashboard tabs → scroll */
+  .tabs-row {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Form pages */
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Event detail → stack */
+  .event-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Certificate actions */
+  .cert-actions {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Button rows */
+  .btn-row-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Stats → 2 col still ok */
+  .cert-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide secondary nav items */
+  .hide-xs { display: none !important; }
+
+  /* Smaller hero text handled by clamp() */
+}
